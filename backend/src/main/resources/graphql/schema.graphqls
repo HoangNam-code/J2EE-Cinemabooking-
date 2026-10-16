@@ -1,0 +1,126 @@
+type Query {
+    # Truy vấn danh sách phim
+    movies: [Movie]
+    nowShowingMovies: [Movie]
+    comingSoonMovies: [Movie]
+    movieById(id: ID!): Movie
+    searchMovies(query: String!): [Movie]
+
+    # Truy vấn suất chiếu & sơ đồ ghế
+    showtimesByMovie(movieId: ID!, date: String): [Showtime]
+    showtimeById(id: ID!): Showtime
+    seatMap(showtimeId: ID!): SeatMap
+
+    # Truy vấn bắp nước & dịch vụ
+    foods: [Food]
+
+    # Truy vấn đơn đặt vé
+    bookingSummary(bookingId: ID!): Booking
+}
+
+type Mutation {
+    cancelBooking(bookingId: ID!): Boolean
+}
+
+type Movie {
+    movieId: ID!
+    movieName: String!
+    duration: Int
+    releaseDate: String
+    endDate: String
+    posterUrl: String
+    trailerUrl: String
+    director: String
+    actors: String
+    description: String
+    status: String
+    categories: [String]
+}
+
+type Showtime {
+    showtimeId: ID!
+    movieId: ID
+    movieName: String
+    posterUrl: String
+    roomId: ID
+    roomName: String
+    roomType: String
+    cinemaId: ID
+    cinemaName: String
+    cinemaAddress: String
+    showDate: String
+    startTime: String
+    endTime: String
+    format: String
+    price: Float
+    status: String
+}
+
+type SeatMap {
+    roomId: ID!
+    roomName: String
+    roomType: String
+    cinemaId: ID
+    cinemaName: String
+    showtimeId: ID!
+    basePrice: Float
+    seats: [SeatItem]
+}
+
+type SeatItem {
+    seatId: ID!
+    seatCode: String!
+    rowName: String
+    seatNumber: Int
+    seatType: String
+    price: Float
+    status: String
+}
+
+type Food {
+    foodId: ID!
+    foodName: String!
+    description: String
+    price: Float!
+    imageUrl: String
+    status: String
+}
+
+type Booking {
+    bookingId: ID!
+    bookingRef: String
+    userId: ID
+    showtimeId: ID
+    movieName: String
+    posterUrl: String
+    cinemaName: String
+    roomName: String
+    showDate: String
+    startTime: String
+    format: String
+    ticketSubtotal: Float
+    foodSubtotal: Float
+    discountAmount: Float
+    totalAmount: Float!
+    status: String
+    remainingSeconds: Int
+    tickets: [TicketItem]
+    foods: [BookingFoodItem]
+}
+
+type TicketItem {
+    ticketId: ID!
+    seatId: ID
+    seatCode: String
+    seatType: String
+    price: Float
+    qrCode: String
+}
+
+type BookingFoodItem {
+    foodId: ID!
+    foodName: String
+    quantity: Int
+    price: Float
+    subtotal: Float
+}

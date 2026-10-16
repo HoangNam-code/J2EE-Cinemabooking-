@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # ==========================================================
+  # Database Service: MySQL 8.0 với Auto-init schema & data
+  # ==========================================================
+  mysql:
+    image: mysql:8.0
+    container_name: cineprime-mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: cinemabooking
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_HOST: "%"
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/cinemabooking_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/cinemabooking_sample_data.sql:/docker-entrypoint-initdb.d/02_sample_data.sql:ro
+      - ./database/update_seats_84.sql:/docker-entrypoint-initdb.d/03_update_seats.sql:ro
+      - ./database/import_cellphones_movies.sql:/docker-entrypoint-initdb.d/04_cellphones_movies.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - cineprime-network
+
+  # ==========================================================
+  # Backend Service: Spring Boot 3.2 (REST, GraphQL, Mail, AI)
+  # ==========================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cineprime-backend
+    restart: always
+    ports:
+      - "8088:8088"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cinemabooking?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_GRAPHQL_GRAPHIQL_ENABLED: "true"
+      SPRING_GRAPHQL_GRAPHIQL_PATH: /graphiql
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - cineprime-network
+
+  # ==========================================================
+  # Frontend Service: React 18 + Vite + Tailwind + Nginx SPA
+  # ==========================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cineprime-frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - cineprime-network
+
+networks:
+  cineprime-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local

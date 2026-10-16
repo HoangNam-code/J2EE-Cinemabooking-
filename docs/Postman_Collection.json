@@ -1,0 +1,435 @@
+{
+	"info": {
+		"_postman_id": "c1f7a0b5-7799-4d45-9852-c8402123ef01",
+		"name": "CinePrime Cinema Booking API",
+		"description": "Bộ sưu tập kiểm thử REST API Đồ án J2EE Đặt vé xem phim CinePrime (Port 8088)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Đăng ký Khách hàng (Register)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser01\",\n  \"password\": \"123456\",\n  \"fullName\": \"Trần Minh Hoàng\",\n  \"email\": \"hoang.tran@example.com\",\n  \"phone\": \"0987654321\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/register",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Đăng nhập Khách hàng (Login Customer)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.token) {",
+									"    pm.environment.set(\"jwt_token\", jsonData.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"customer01\",\n  \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				},
+				{
+					"name": "Đăng nhập Quản trị viên (Login Admin)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.token) {",
+									"    pm.environment.set(\"admin_token\", jsonData.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/auth/login",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Phim (Movies)",
+			"item": [
+				{
+					"name": "Danh sách tất cả phim",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/movies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "movies"]
+						}
+					}
+				},
+				{
+					"name": "Phim đang chiếu (Now Showing)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/movies/now-showing",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "movies", "now-showing"]
+						}
+					}
+				},
+				{
+					"name": "Phim sắp chiếu (Coming Soon)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/movies/coming-soon",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "movies", "coming-soon"]
+						}
+					}
+				},
+				{
+					"name": "Chi tiết phim theo ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/movies/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "movies", "1"]
+						}
+					}
+				},
+				{
+					"name": "Tìm kiếm phim",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/movies/search?q=Orion",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "movies", "search"],
+							"query": [
+								{
+									"key": "q",
+									"value": "Orion"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Lịch chiếu & Sơ đồ ghế (Showtimes & Seats)",
+			"item": [
+				{
+					"name": "Lấy suất chiếu theo Phim",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/showtimes/movie/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "showtimes", "movie", "1"]
+						}
+					}
+				},
+				{
+					"name": "Sơ đồ ghế + trạng thái FREE / HOLD / BOOKED",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/showtimes/1/seats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "showtimes", "1", "seats"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "4. Menu Bắp Nước (Foods)",
+			"item": [
+				{
+					"name": "Lấy danh mục Bắp Nước & Combo",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/foods",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "foods"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Đặt vé & Giữ ghế (Bookings)",
+			"item": [
+				{
+					"name": "Tạo đơn giữ ghế 10 phút (Hold Booking)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"showtimeId\": 1,\n  \"seatIds\": [1, 2],\n  \"foods\": [\n    {\n      \"foodId\": 3,\n      \"quantity\": 1\n    }\n  ],\n  \"promotionCode\": \"WELCOME10\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bookings/hold",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "bookings", "hold"]
+						}
+					}
+				},
+				{
+					"name": "Xem tóm tắt đơn hàng & thời gian còn lại",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bookings/1",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "bookings", "1"]
+						}
+					}
+				},
+				{
+					"name": "Lịch sử đặt vé cá nhân",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/bookings/my-bookings",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "bookings", "my-bookings"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Thanh toán (Payments)",
+			"item": [
+				{
+					"name": "Tạo URL Thanh toán VNPAY Sandbox",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/payments/create?bookingId=1&method=VNPAY",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "payments", "create"],
+							"query": [
+								{
+									"key": "bookingId",
+									"value": "1"
+								},
+								{
+									"key": "method",
+									"value": "VNPAY"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Thanh toán Tiền mặt / Chuyển khoản trực tiếp",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{jwt_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/payments/create?bookingId=1&method=CASH",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "payments", "create"],
+							"query": [
+								{
+									"key": "bookingId",
+									"value": "1"
+								},
+								{
+									"key": "method",
+									"value": "CASH"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "7. Quản trị viên (Admin)",
+			"item": [
+				{
+					"name": "Thống kê Dashboard (Doanh thu & Số vé bán)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/stats",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "admin", "stats"]
+						}
+					}
+				},
+				{
+					"name": "Thêm phim mới (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"movieName\": \"Chiến Binh Không Gian\",\n  \"duration\": 135,\n  \"director\": \"Ridley Scott\",\n  \"actors\": \"Michael Fassbender, Sigourney Weaver\",\n  \"description\": \"Hành trình khám phá hành tinh bí ẩn ngoài dải ngân hà.\",\n  \"releaseDate\": \"2026-11-01\",\n  \"endDate\": \"2026-12-31\",\n  \"posterUrl\": \"https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600\",\n  \"trailerUrl\": \"https://youtube.com/\",\n  \"status\": \"COMING_SOON\",\n  \"categoryIds\": [1, 2]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/movies",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "admin", "movies"]
+						}
+					}
+				},
+				{
+					"name": "Tạo suất chiếu mới (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{admin_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"movieId\": 1,\n  \"roomId\": 1,\n  \"showDate\": \"2026-10-12\",\n  \"startTime\": \"20:00:00\",\n  \"price\": 100000.00,\n  \"format\": \"2D\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/admin/showtimes",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "admin", "showtimes"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8088",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
