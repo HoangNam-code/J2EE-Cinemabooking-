@@ -96,7 +96,7 @@ export const Navbar = () => {
               }
             >
               <Ticket className="w-4 h-4" />
-              <span>Soát Vé</span>
+              <span>Vận Hành Rạp</span>
             </NavLink>
           )}
 

@@ -22,15 +22,18 @@ export const MovieDetailPage = () => {
 
   const [movie, setMovie] = useState(null);
   const [showtimes, setShowtimes] = useState([]);
+  const [allMovieShowtimes, setAllMovieShowtimes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingShowtimes, setLoadingShowtimes] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   const [showTrailerModal, setShowTrailerModal] = useState(false);
 
-  // Generate next 7 days list: [{ value: 'YYYY-MM-DD', label: 'Hôm nay', dayMonth: '11/10', weekday: 'T7' }, ...]
+  // Generate next 7 days list + dates with showtimes
   const dateTabs = useMemo(() => {
     const tabs = [];
     const today = new Date();
+    const existingDateSet = new Set();
+
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
@@ -38,6 +41,7 @@ export const MovieDetailPage = () => {
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       const value = `${year}-${month}-${day}`;
+      existingDateSet.add(value);
 
       let label = `${day}/${month}`;
       let subLabel = '';
@@ -55,31 +59,62 @@ export const MovieDetailPage = () => {
 
       tabs.push({ value, label, subLabel, dateObj: d });
     }
-    return tabs;
-  }, []);
 
-  // Initialize selectedDate to today
-  useEffect(() => {
-    if (dateTabs.length > 0 && !selectedDate) {
-      setSelectedDate(dateTabs[0].value);
+    // Append dates with existing showtimes outside the 7-day range
+    const otherDates = Array.from(new Set(allMovieShowtimes.map((st) => st.showDate).filter(Boolean)))
+      .filter((dateStr) => !existingDateSet.has(dateStr))
+      .sort();
+
+    for (const dateStr of otherDates) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        const day = parts[2];
+        const month = parts[1];
+        const daysOfWeek = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+        const label = daysOfWeek[d.getDay()] || 'Suất';
+        const subLabel = `${day}/${month}`;
+        tabs.push({ value: dateStr, label, subLabel, dateObj: d, isSpecial: true });
+      }
     }
-  }, [dateTabs, selectedDate]);
 
-  // Load movie detail
+    return tabs;
+  }, [allMovieShowtimes]);
+
+  // Load movie detail and all showtimes of this movie
   useEffect(() => {
-    const fetchMovie = async () => {
+    const fetchMovieAndShowtimes = async () => {
       try {
         setLoading(true);
-        const data = await movieApi.getById(id);
-        setMovie(data);
+        const [movieData, stData] = await Promise.all([
+          movieApi.getById(id),
+          showtimeApi.getByMovie(id).catch(() => []),
+        ]);
+        setMovie(movieData);
+
+        const list = Array.isArray(stData) ? stData : [];
+        setAllMovieShowtimes(list);
+
+        // Auto select date: if today has showtimes, pick today; else pick earliest available date
+        const distinctDates = Array.from(new Set(list.map((s) => s.showDate).filter(Boolean))).sort();
+        const d = new Date();
+        const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+        if (distinctDates.includes(todayStr)) {
+          setSelectedDate(todayStr);
+        } else if (distinctDates.length > 0) {
+          setSelectedDate(distinctDates[0]);
+        } else {
+          setSelectedDate(todayStr);
+        }
       } catch (err) {
-        console.error('Error fetching movie:', err);
+        console.error('Error fetching movie or showtimes:', err);
       } finally {
         setLoading(false);
       }
     };
     if (id) {
-      fetchMovie();
+      fetchMovieAndShowtimes();
     }
   }, [id]);
 

@@ -29,6 +29,7 @@ public class JwtAuthEntryPoint implements AuthenticationEntryPoint {
                 "Yêu cầu xác thực: Bạn cần đăng nhập với Bearer Token hợp lệ để truy cập"
         );
 
-        response.getOutputStream().println(objectMapper.writeValueAsString(apiResponse));
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
     }
 }

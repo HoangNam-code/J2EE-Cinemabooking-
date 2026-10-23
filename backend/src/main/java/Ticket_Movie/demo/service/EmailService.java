@@ -12,4 +12,9 @@ public interface EmailService {
      * Gửi email thông báo hủy vé
      */
     void sendBookingCancellationEmail(Booking booking);
+
+    /**
+     * Gửi mã OTP xác thực đăng ký tài khoản qua email
+     */
+    void sendRegistrationOtpEmail(String toEmail, String otp, String fullName);
 }

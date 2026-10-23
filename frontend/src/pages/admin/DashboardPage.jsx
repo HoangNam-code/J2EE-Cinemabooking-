@@ -21,7 +21,12 @@ import {
   Ticket,
   Video,
   Clapperboard,
-  RefreshCw
+  RefreshCw,
+  Users,
+  ShieldAlert,
+  UserCheck,
+  UserX,
+  Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +35,11 @@ export const DashboardPage = () => {
   const [stats, setStats] = useState(null);
   const [movies, setMovies] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userRoleFilter, setUserRoleFilter] = useState('ALL');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [updatingUserId, setUpdatingUserId] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Bộ lọc Phim
@@ -65,7 +75,7 @@ export const DashboardPage = () => {
   const [newShowtime, setNewShowtime] = useState({
     movieId: '',
     roomId: 1,
-    showDate: '2026-10-16',
+    showDate: new Date().toISOString().split('T')[0],
     startTime: '19:00:00',
     price: 90000,
     format: '2D',
@@ -79,14 +89,16 @@ export const DashboardPage = () => {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const [statsData, moviesData, categoriesData] = await Promise.all([
+      const [statsData, moviesData, categoriesData, usersData] = await Promise.all([
         adminApi.getStats().catch(() => null),
         movieApi.getAll().catch(() => []),
         categoryApi.getAll().catch(() => []),
+        adminApi.getUsers().catch(() => []),
       ]);
       setStats(statsData);
       setMovies(moviesData || []);
       setCategories(categoriesData || []);
+      setUsers(Array.isArray(usersData) ? usersData : []);
       if (moviesData && moviesData.length > 0 && !newShowtime.movieId) {
         setNewShowtime((prev) => ({ ...prev, movieId: moviesData[0].movieId }));
       }
@@ -293,6 +305,78 @@ export const DashboardPage = () => {
     });
   };
 
+  // --- THAO TÁC QUẢN LÝ PHÂN QUYỀN NGƯỜI DÙNG (RBAC) ---
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const data = await adminApi.getUsers();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách người dùng:', err);
+      toast.error('Không thể tải danh sách người dùng');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleUpdateUserRole = async (userId, newRole) => {
+    try {
+      setUpdatingUserId(userId);
+      await adminApi.updateUserRole(userId, newRole);
+      setUsers((prev) =>
+        prev.map((u) => (u.userId === userId ? { ...u, role: newRole } : u))
+      );
+      toast.success(`Đã phân quyền thành công tài khoản sang vai trò: ${newRole}!`);
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi cập nhật phân quyền');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleToggleUserStatus = async (userId, currentStatus) => {
+    const nextStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      setUpdatingUserId(userId);
+      await adminApi.updateUserStatus(userId, nextStatus);
+      setUsers((prev) =>
+        prev.map((u) => (u.userId === userId ? { ...u, status: nextStatus } : u))
+      );
+      toast.success(`Đã chuyển trạng thái tài khoản thành: ${nextStatus}!`);
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi cập nhật trạng thái');
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId, username) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản "${username}" không?`)) {
+      return;
+    }
+    try {
+      await adminApi.deleteUser(userId);
+      setUsers((prev) => prev.filter((u) => u.userId !== userId));
+      toast.success(`Đã xóa tài khoản "${username}" thành công!`);
+    } catch (err) {
+      toast.error(err.message || 'Không thể xóa tài khoản này');
+    }
+  };
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchRole = userRoleFilter === 'ALL' || u.role === userRoleFilter;
+      const q = userSearchQuery.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        (u.fullName || '').toLowerCase().includes(q) ||
+        (u.username || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.phone || '').includes(q);
+      return matchRole && matchSearch;
+    });
+  }, [users, userRoleFilter, userSearchQuery]);
+
   // --- THAO TÁC XẾP LỊCH CHIẾU ---
   const handleAddShowtime = async (e) => {
     e.preventDefault();
@@ -306,7 +390,7 @@ export const DashboardPage = () => {
         price: Number(newShowtime.price),
         format: newShowtime.format,
       });
-      toast.success('Xếp lịch chiếu mới thành công!');
+      toast.success(`Xếp lịch chiếu thành công cho ngày ${newShowtime.showDate}!`);
     } catch (err) {
       toast.error(err.message || 'Lỗi xếp lịch chiếu');
     } finally {
@@ -456,6 +540,21 @@ export const DashboardPage = () => {
           >
             <Clock className="w-4 h-4" />
             <span>Xếp Lịch Chiếu</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('users');
+              loadUsers();
+            }}
+            className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+              activeTab === 'users'
+                ? 'bg-amber-400 text-neutral-950 shadow-lg shadow-amber-400/20'
+                : 'bg-neutral-900/60 text-neutral-400 hover:text-white hover:bg-neutral-800'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Phân Quyền & Người Dùng ({users.length})</span>
           </button>
         </div>
 
@@ -1201,6 +1300,249 @@ export const DashboardPage = () => {
             </form>
           </div>
         )}
+        {/* ======================================================== */}
+        {/* TAB 5: PHÂN QUYỀN & QUẢN LÝ NGƯỜI DÙNG (RBAC)            */}
+        {/* ======================================================== */}
+        {activeTab === 'users' && (
+          <div className="space-y-6 animate-fade-in">
+            {/* 3 Summary Cards for RBAC Roles */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Card 1: ADMIN */}
+              <div className="p-5 bg-gradient-to-br from-red-950/40 via-neutral-900/80 to-neutral-950 border border-red-500/30 rounded-2xl shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
+                    Cấp cao nhất
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-white">
+                    {users.filter((u) => u.role === 'ADMIN').length}
+                  </div>
+                  <div className="text-xs font-bold text-red-300 mt-1 uppercase tracking-wide">
+                    Quản Trị Viên (ADMIN)
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                    Toàn quyền quản trị hệ thống, quản lý doanh thu, phim, suất chiếu và phân quyền nhân sự.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 2: STAFF */}
+              <div className="p-5 bg-gradient-to-br from-blue-950/40 via-neutral-900/80 to-neutral-950 border border-blue-500/30 rounded-2xl shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                    Vận hành rạp
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-white">
+                    {users.filter((u) => u.role === 'STAFF').length}
+                  </div>
+                  <div className="text-xs font-bold text-blue-300 mt-1 uppercase tracking-wide">
+                    Nhân Viên Rạp (STAFF)
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                    Truy cập cổng soát vé (/staff/scanner), quét mã QR vé, kiểm tra trạng thái vé vào rạp.
+                  </p>
+                </div>
+              </div>
+
+              {/* Card 3: CUSTOMER */}
+              <div className="p-5 bg-gradient-to-br from-emerald-950/40 via-neutral-900/80 to-neutral-950 border border-emerald-500/30 rounded-2xl shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Người xem phim
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <div className="text-2xl font-extrabold text-white">
+                    {users.filter((u) => u.role === 'CUSTOMER').length}
+                  </div>
+                  <div className="text-xs font-bold text-emerald-300 mt-1 uppercase tracking-wide">
+                    Khách Hàng (CUSTOMER)
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
+                    Xem phim, chọn ghế rạp trực tuyến, mua combo bắp nước, thanh toán VNPAY và xem vé QR.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="p-4 bg-[#0f1117] border border-neutral-800 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                {['ALL', 'ADMIN', 'STAFF', 'CUSTOMER'].map((roleKey) => (
+                  <button
+                    key={roleKey}
+                    onClick={() => setUserRoleFilter(roleKey)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      userRoleFilter === roleKey
+                        ? 'bg-amber-400 text-neutral-950 shadow-md'
+                        : 'bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    {roleKey === 'ALL' ? 'Tất Cả Vai Trò' : roleKey}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search className="w-4 h-4 text-neutral-500 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên, username, email..."
+                  value={userSearchQuery}
+                  onChange={(e) => setUserSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            {/* User List Table */}
+            <div className="bg-[#0f1117] border border-neutral-800 rounded-2xl shadow-xl overflow-hidden">
+              <div className="p-4 border-b border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-bold text-white">Danh Sách Tài Khoản & Phân Quyền Trực Tiếp</span>
+                </div>
+                <button
+                  onClick={loadUsers}
+                  disabled={loadingUsers}
+                  className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                  title="Tải lại danh sách"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingUsers ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-neutral-950/80 text-neutral-400 font-mono uppercase text-[11px] border-b border-neutral-800">
+                    <tr>
+                      <th className="py-3.5 px-4">Người Dùng</th>
+                      <th className="py-3.5 px-4">Email & Số Điện Thoại</th>
+                      <th className="py-3.5 px-4 text-center">Vai Trò Hiện Tại</th>
+                      <th className="py-3.5 px-4 text-center">Thay Đổi Phân Quyền (RBAC)</th>
+                      <th className="py-3.5 px-4 text-center">Trạng Thái</th>
+                      <th className="py-3.5 px-4 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/80 text-neutral-200">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-neutral-500 font-mono">
+                          Không tìm thấy tài khoản nào phù hợp
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map((u) => {
+                        const isSelfAdmin = u.username === 'admin';
+                        const isUpdating = updatingUserId === u.userId;
+                        return (
+                          <tr key={u.userId} className="hover:bg-neutral-900/50 transition-colors">
+                            {/* User details */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center font-bold text-amber-400 shrink-0">
+                                  {(u.fullName || u.username || 'U')[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-white text-sm">{u.fullName || u.username}</div>
+                                  <div className="font-mono text-[11px] text-neutral-400">@{u.username} (ID: #{u.userId})</div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Email & Phone */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-mono text-neutral-300">{u.email}</div>
+                              <div className="font-mono text-[11px] text-neutral-500">{u.phone || 'Chưa cập nhật'}</div>
+                            </td>
+
+                            {/* Current Role Badge */}
+                            <td className="py-3.5 px-4 text-center">
+                              {u.role === 'ADMIN' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                                  <ShieldAlert className="w-3 h-3" />
+                                  <span>ADMIN</span>
+                                </span>
+                              )}
+                              {u.role === 'STAFF' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                                  <UserCheck className="w-3 h-3" />
+                                  <span>STAFF</span>
+                                </span>
+                              )}
+                              {u.role === 'CUSTOMER' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                  <Users className="w-3 h-3" />
+                                  <span>CUSTOMER</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Role Switcher */}
+                            <td className="py-3.5 px-4 text-center">
+                              <select
+                                value={u.role}
+                                disabled={isSelfAdmin || isUpdating}
+                                onChange={(e) => handleUpdateUserRole(u.userId, e.target.value)}
+                                className="px-3 py-1.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:border-amber-400 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                <option value="CUSTOMER">👤 Khách Hàng (CUSTOMER)</option>
+                                <option value="STAFF">🎟️ Nhân Viên Soát Vé (STAFF)</option>
+                                <option value="ADMIN">👑 Quản Trị Viên (ADMIN)</option>
+                              </select>
+                            </td>
+
+                            {/* Status toggle */}
+                            <td className="py-3.5 px-4 text-center">
+                              <button
+                                type="button"
+                                disabled={isSelfAdmin || isUpdating}
+                                onClick={() => handleToggleUserStatus(u.userId, u.status)}
+                                className={`px-3 py-1 rounded-full text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  u.status === 'ACTIVE'
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                                    : 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30'
+                                }`}
+                              >
+                                {u.status === 'ACTIVE' ? '✓ Đang Hoạt Động' : '✕ Đã Khóa'}
+                              </button>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3.5 px-4 text-right">
+                              <button
+                                type="button"
+                                disabled={isSelfAdmin}
+                                onClick={() => handleDeleteUser(u.userId, u.username)}
+                                className="p-2 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                title={isSelfAdmin ? 'Không thể xóa tài khoản Admin đang đăng nhập' : 'Xóa tài khoản này'}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
 
       </div>
     </div>

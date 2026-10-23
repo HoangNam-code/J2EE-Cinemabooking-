@@ -4,6 +4,7 @@ import { User, Lock, Eye, EyeOff, AlertCircle, Film, Sparkles, Loader2, ArrowRig
 import { toast } from 'sonner';
 import { authApi } from '../api';
 import { useAuth } from '../store/AuthContext';
+import { SocialAuthModal } from '../components/auth/SocialAuthModal';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -12,6 +13,12 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Social Auth Modal State
+  const [socialModal, setSocialModal] = useState({
+    isOpen: false,
+    provider: 'GOOGLE', // 'GOOGLE' | 'FACEBOOK'
+  });
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -47,35 +54,30 @@ export const LoginPage = () => {
     }
   };
 
-  const handleSocialLogin = async (provider) => {
+  const handleOpenSocialModal = (provider) => {
+    setError('');
+    setSocialModal({
+      isOpen: true,
+      provider,
+    });
+  };
+
+  const handleSocialLoginSuccess = async (socialData) => {
     try {
       setLoading(true);
       setError('');
-      
-      // Giả lập thông tin profile từ Google/Facebook OAuth
-      const defaultEmail = provider === 'GOOGLE' ? 'dhnam1109@gmail.com' : 'user.cineprime@facebook.com';
-      const promptEmail = window.prompt(
-        `Nhập địa chỉ Email ${provider === 'GOOGLE' ? 'Gmail' : 'Facebook'} của bạn:`,
-        defaultEmail
-      );
 
-      if (!promptEmail || !promptEmail.trim()) {
-        setLoading(false);
-        return;
-      }
-
-      const email = promptEmail.trim();
-      const name = email.split('@')[0];
-
+      // Send social profile to backend API
       const data = await authApi.socialLogin({
-        provider,
-        email,
-        name: name.toUpperCase(),
-        providerId: `${provider.toLowerCase()}_${Date.now()}`,
+        provider: socialData.provider,
+        email: socialData.email,
+        name: socialData.name,
+        providerId: socialData.providerId || `${socialData.provider.toLowerCase()}_${Date.now()}`,
+        avatarUrl: socialData.avatarUrl || '',
       });
 
       login(data);
-      toast.success(`Đăng nhập thành công với tài khoản ${provider}! Chào mừng ${data.fullName || data.username}`);
+      toast.success(`Đăng nhập thành công với tài khoản ${socialData.provider}! Chào mừng ${data.fullName || data.username}`);
 
       if (data.role === 'ADMIN' || data.role === 'STAFF') {
         navigate('/admin');
@@ -83,49 +85,63 @@ export const LoginPage = () => {
         navigate('/');
       }
     } catch (err) {
-      const msg = err.message || `Đăng nhập qua ${provider} thất bại`;
+      const msg = err.message || `Đăng nhập qua ${socialData.provider} thất bại`;
       setError(msg);
       toast.error(msg);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[85vh] bg-[#0b0c10] flex items-center justify-center p-4 sm:p-6 text-neutral-100 relative overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#0b0c10] text-neutral-100 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
+      {/* Background Glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none" />
 
+      {/* Main Card */}
       <div className="w-full max-w-md relative z-10">
-        <div className="bg-[#0f1117] border border-neutral-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
-          
-          {/* Logo / Title */}
-          <div className="text-center space-y-2 mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-400/10 border border-amber-400/20 text-amber-400 mb-2">
+        
+        {/* Brand / Logo */}
+        <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center gap-2.5 group">
+            <div className="w-11 h-11 rounded-xl bg-amber-400 flex items-center justify-center text-neutral-950 font-bold shadow-lg shadow-amber-400/20 group-hover:scale-105 transition-transform">
               <Film className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-wide">
-              Cine<span className="text-amber-400">Prime</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-neutral-400">
-              Đăng nhập tài khoản để trải nghiệm điện ảnh thượng đỉnh
-            </p>
-          </div>
+            <div className="text-left">
+              <span className="font-display font-extrabold text-2xl tracking-tight text-white block">
+                CINE<span className="text-amber-400">PRIME</span>
+              </span>
+              <span className="text-[10px] font-mono tracking-widest text-neutral-400 uppercase block -mt-1">
+                J2EE Cinema Experience
+              </span>
+            </div>
+          </Link>
+          <h1 className="text-xl sm:text-2xl font-bold font-display text-white mt-6">
+            Chào Mừng Trở Lại
+          </h1>
+          <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+            Đăng nhập để đặt vé xem phim, chọn ghế rạp và ưu đãi VIP
+          </p>
+        </div>
 
-          {/* Error alert with animation */}
+        {/* Form Container */}
+        <div className="bg-[#12141c] border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md">
+
+          {/* Error Banner */}
           {error && (
-            <div className="mb-6 p-3.5 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-start gap-2.5 animate-fade-in">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-              <span className="flex-1 leading-relaxed">{error}</span>
+            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/20 rounded-xl text-xs sm:text-sm text-red-400 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
           )}
 
-          {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* Username Input */}
+            {/* Username Field */}
             <div>
-              <label className="block text-xs font-mono text-neutral-400 mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-mono text-neutral-400 uppercase mb-1.5">
                 Tên Đăng Nhập
               </label>
               <div className="relative">
@@ -135,18 +151,18 @@ export const LoginPage = () => {
                 <input
                   type="text"
                   required
-                  placeholder="admin hoặc customer01..."
+                  placeholder="admin, staff01, hoặc customer01"
                   value={form.username}
                   onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs sm:text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-400 transition-colors"
+                  className="w-full pl-10 pr-3.5 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs sm:text-sm text-white placeholder-neutral-600 focus:outline-none focus:border-amber-400 transition-colors"
                 />
               </div>
             </div>
 
-            {/* Password Input */}
+            {/* Password Field */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-mono text-neutral-400 uppercase tracking-wider">
+                <label className="block text-xs font-mono text-neutral-400 uppercase">
                   Mật Khẩu
                 </label>
                 <span className="text-[11px] text-neutral-500 font-mono">
@@ -211,7 +227,7 @@ export const LoginPage = () => {
               {/* Google Login Button */}
               <button
                 type="button"
-                onClick={() => handleSocialLogin('GOOGLE')}
+                onClick={() => handleOpenSocialModal('GOOGLE')}
                 disabled={loading}
                 className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-xl text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
               >
@@ -239,7 +255,7 @@ export const LoginPage = () => {
               {/* Facebook Login Button */}
               <button
                 type="button"
-                onClick={() => handleSocialLogin('FACEBOOK')}
+                onClick={() => handleOpenSocialModal('FACEBOOK')}
                 disabled={loading}
                 className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-xl text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
               >
@@ -264,6 +280,14 @@ export const LoginPage = () => {
 
         </div>
       </div>
+
+      {/* Social Auth Modal */}
+      <SocialAuthModal
+        isOpen={socialModal.isOpen}
+        provider={socialModal.provider}
+        onClose={() => setSocialModal((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={handleSocialLoginSuccess}
+      />
     </div>
   );
 };

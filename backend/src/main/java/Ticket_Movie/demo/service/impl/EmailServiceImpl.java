@@ -196,4 +196,82 @@ public class EmailServiceImpl implements EmailService {
             }
         });
     }
+
+    @Override
+    public void sendRegistrationOtpEmail(String toEmail, String otp, String fullName) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (toEmail == null || toEmail.trim().isEmpty()) return;
+
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                helper.setFrom(fromEmail, "CinePrime Cinema");
+                helper.setTo(toEmail.trim());
+                helper.setSubject("🔐 [CinePrime] Mã xác thực đăng ký tài khoản: " + otp);
+
+                String displayName = (fullName != null && !fullName.trim().isEmpty()) ? fullName : "Quý khách";
+
+                String html = """
+                    <!DOCTYPE html>
+                    <html lang="vi">
+                    <head>
+                        <meta charset="UTF-8">
+                        <style>
+                            body { margin: 0; padding: 0; background-color: #0b0c10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #ffffff; }
+                            .container { max-width: 520px; margin: 30px auto; background-color: #12141c; border-radius: 16px; border: 1px solid #27272a; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+                            .header { background: linear-gradient(135deg, #18181b 0%, #090a0f 100%); padding: 30px 20px; text-align: center; border-bottom: 2px solid #fbbf24; }
+                            .brand { font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #ffffff; margin: 0; }
+                            .brand span { color: #fbbf24; }
+                            .sub-brand { font-size: 11px; letter-spacing: 2px; color: #a1a1aa; margin-top: 4px; text-transform: uppercase; }
+                            .content { padding: 30px 25px; line-height: 1.6; }
+                            .greeting { font-size: 16px; color: #e4e4e7; margin-bottom: 15px; }
+                            .instruction { font-size: 14px; color: #a1a1aa; margin-bottom: 25px; }
+                            .otp-card { background: #181922; border: 1px solid #3f3f46; border-radius: 12px; padding: 25px 15px; text-align: center; margin: 20px 0; }
+                            .otp-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #fbbf24; margin-bottom: 8px; }
+                            .otp-code { font-family: 'Courier New', Courier, monospace; font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #ffffff; text-shadow: 0 2px 10px rgba(251,191,36,0.4); margin: 0; }
+                            .expire-notice { font-size: 12px; color: #f59e0b; margin-top: 8px; }
+                            .warning-box { background: rgba(239, 68, 68, 0.08); border-left: 3px solid #ef4444; padding: 12px 15px; border-radius: 6px; font-size: 12px; color: #fca5a5; margin-top: 20px; }
+                            .footer { background: #090a0f; padding: 20px; text-align: center; font-size: 11px; color: #71717a; border-top: 1px solid #1f1f23; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1 class="brand">CINE<span>PRIME</span></h1>
+                                <div class="sub-brand">Premium Cinema Experience</div>
+                            </div>
+                            <div class="content">
+                                <p class="greeting">Xin chào <strong>{{NAME}}</strong>,</p>
+                                <p class="instruction">Cảm ơn bạn đã đăng ký tài khoản tại <strong>CinePrime</strong>. Vui lòng sử dụng mã xác thực OTP dưới đây để hoàn tất quá trình đăng ký:</p>
+                                
+                                <div class="otp-card">
+                                    <div class="otp-label">MÃ XÁC THỰC CỦA BẠN</div>
+                                    <div class="otp-code">{{OTP}}</div>
+                                    <div class="expire-notice">⏱ Mã có hiệu lực trong vòng 5 phút</div>
+                                </div>
+
+                                <div class="warning-box">
+                                    ⚠️ <strong>Lưu ý bảo mật:</strong> Tuyệt đối không chia sẻ mã này với bất kỳ ai để bảo vệ thông tin tài khoản của bạn.
+                                </div>
+                            </div>
+                            <div class="footer">
+                                <p>© 2026 CinePrime Cinema System. All rights reserved.</p>
+                                <p>Email này được gửi tự động, vui lòng không phản hồi.</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    .replace("{{NAME}}", displayName)
+                    .replace("{{OTP}}", otp);
+
+                helper.setText(html, true);
+                mailSender.send(message);
+                log.info("📧 [MAIL SENT] Đã gửi email mã OTP đăng ký thành công tới {}", toEmail);
+
+            } catch (Exception e) {
+                log.warn("⚠️ Không thể gửi email OTP tới {}: {}", toEmail, e.getMessage());
+            }
+        });
+    }
 }

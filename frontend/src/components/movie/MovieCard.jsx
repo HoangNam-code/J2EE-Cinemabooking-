@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Ticket, Clock, Star, Calendar } from 'lucide-react';
-import { MovieImage } from './MovieImage';
+import { MovieImage } from '../common/MovieImage';
 
 export const MovieCard = ({ movie, onOpenDetails, onPlayTrailer }) => {
   const navigate = useNavigate();

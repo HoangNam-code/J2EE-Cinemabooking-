@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Ticket, Clock, Star, Volume2 } from 'lucide-react';
-import { MovieImage } from '../movie/MovieImage';
+import { MovieImage } from '../common/MovieImage';
 
 export const HeroBanner = ({
   movie,

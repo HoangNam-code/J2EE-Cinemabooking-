@@ -1,39 +1,46 @@
 package Ticket_Movie.demo.controller;
 
 import Ticket_Movie.demo.dto.response.ApiResponse;
-import Ticket_Movie.demo.entity.Booking;
-import Ticket_Movie.demo.entity.Showtime;
-import Ticket_Movie.demo.entity.Ticket;
+import Ticket_Movie.demo.entity.*;
 import Ticket_Movie.demo.exception.AppException;
 import Ticket_Movie.demo.exception.ResourceNotFoundException;
-import Ticket_Movie.demo.repository.BookingRepository;
-import Ticket_Movie.demo.repository.TicketRepository;
+import Ticket_Movie.demo.repository.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Controller dành cho Nhân viên soát vé tại rạp (Role: STAFF & ADMIN)
- * Cung cấp chức năng kiểm tra vé, check-in QR Code tại cổng rạp.
+ * Controller dành riêng cho Nhân viên rạp (Role: STAFF & ADMIN)
+ * Cung cấp các chức năng thực thi vận hành hàng ngày:
+ * 1. Soát vé điện tử & Quét Check-in QR Code.
+ * 2. Quản lý kho Bắp - Nước tại quầy (Bật / Tắt trạng thái Còn hàng - Hết hàng).
+ * 3. Quản lý sơ đồ ghế phòng chiếu (Khóa ghế hỏng / Bảo trì / Mở lại phục vụ).
  */
 @RestController
 @RequestMapping("/api/v1/staff")
 @RequiredArgsConstructor
-@Tag(name = "Staff Operations", description = "Các API dành riêng cho Nhân viên rạp (Soát vé & Check-in QR)")
+@Tag(name = "Staff Operations", description = "Các API vận hành dành cho Nhân viên rạp (Soát vé, Quản lý kho Bắp nước, Khóa ghế bảo trì)")
 public class StaffController {
 
     private final TicketRepository ticketRepository;
     private final BookingRepository bookingRepository;
+    private final FoodRepository foodRepository;
+    private final RoomRepository roomRepository;
+    private final SeatRepository seatRepository;
+
+    // ==========================================
+    // 1. NGHIỆP VỤ SOÁT VÉ & CHECK-IN QR
+    // ==========================================
 
     @GetMapping("/check-ticket")
     @Operation(summary = "Kiểm tra chi tiết vé theo mã QR Code hoặc Mã Đặt Vé")
@@ -92,6 +99,126 @@ public class StaffController {
         return ResponseEntity.ok(ApiResponse.success("✓ Check-in toàn bộ vé trong đơn thành công!", buildTicketResponse(queryCode)));
     }
 
+    // ==========================================
+    // 2. QUẢN LÝ KHO BẮP - NƯỚC (QUẦY CĂNG TIN RẠP)
+    // ==========================================
+
+    @GetMapping("/foods")
+    @Operation(summary = "Lấy danh sách tất cả món bắp nước kèm trạng thái Còn hàng / Hết hàng")
+    public ResponseEntity<ApiResponse<List<Food>>> getAllFoodsForStaff() {
+        List<Food> foods = foodRepository.findAll();
+        return ResponseEntity.ok(ApiResponse.success(foods));
+    }
+
+    @PutMapping("/foods/{foodId}/toggle")
+    @Operation(summary = "Nhân viên bật / tắt nhanh trạng thái Còn hàng (ACTIVE) hoặc Hết hàng (INACTIVE)")
+    public ResponseEntity<ApiResponse<Food>> toggleFoodStatus(@PathVariable Integer foodId) {
+        Food food = foodRepository.findById(foodId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy món bắp/nước với ID: " + foodId));
+
+        if (food.getStatus() == Food.Status.ACTIVE) {
+            food.setStatus(Food.Status.INACTIVE);
+        } else {
+            food.setStatus(Food.Status.ACTIVE);
+        }
+        foodRepository.save(food);
+
+        String message = food.getStatus() == Food.Status.ACTIVE
+                ? "Đã mở bán lại món: " + food.getFoodName()
+                : "Đã đánh dấu hết hàng: " + food.getFoodName();
+
+        return ResponseEntity.ok(ApiResponse.success(message, food));
+    }
+
+    @PutMapping("/foods/{foodId}/status")
+    @Operation(summary = "Nhân viên cập nhật trạng thái bắp nước")
+    public ResponseEntity<ApiResponse<Food>> updateFoodStatus(@PathVariable Integer foodId, @RequestParam Food.Status status) {
+        Food food = foodRepository.findById(foodId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy món bắp/nước với ID: " + foodId));
+
+        food.setStatus(status);
+        foodRepository.save(food);
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật trạng thái món bắp/nước thành công", food));
+    }
+
+    // ==========================================
+    // 3. QUẢN LÝ SƠ ĐỒ GHẾ & KHÓA GHẾ BẢO TRÌ
+    // ==========================================
+
+    @GetMapping("/rooms")
+    @Operation(summary = "Lấy danh sách các phòng chiếu kèm số lượng ghế bảo trì")
+    public ResponseEntity<ApiResponse<List<StaffRoomResponse>>> getRoomsForStaff() {
+        List<Room> rooms = roomRepository.findAll();
+        List<StaffRoomResponse> result = rooms.stream().map(room -> {
+            List<Seat> seats = seatRepository.findByRoomRoomIdOrderByRowNameAscSeatNumberAsc(room.getRoomId());
+            long maintenanceCount = seats.stream().filter(s -> s.getStatus() == Seat.Status.MAINTENANCE).count();
+            long inactiveCount = seats.stream().filter(s -> s.getStatus() == Seat.Status.INACTIVE).count();
+
+            return StaffRoomResponse.builder()
+                    .roomId(room.getRoomId())
+                    .roomName(room.getRoomName())
+                    .roomType(room.getRoomType())
+                    .cinemaName(room.getCinema() != null ? room.getCinema().getCinemaName() : "CinePrime")
+                    .totalSeats(seats.size())
+                    .maintenanceSeats((int) maintenanceCount)
+                    .inactiveSeats((int) inactiveCount)
+                    .build();
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @GetMapping("/rooms/{roomId}/seats")
+    @Operation(summary = "Lấy sơ đồ và trạng thái tất cả các ghế trong phòng chiếu")
+    public ResponseEntity<ApiResponse<List<StaffSeatResponse>>> getRoomSeatsForStaff(@PathVariable Integer roomId) {
+        List<Seat> seats = seatRepository.findByRoomRoomIdOrderByRowNameAscSeatNumberAsc(roomId);
+        List<StaffSeatResponse> result = seats.stream().map(this::toSeatResponse).collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    @PutMapping("/seats/{seatId}/toggle-maintenance")
+    @Operation(summary = "Nhân viên bật / tắt trạng thái bảo trì ghế (ACTIVE <-> MAINTENANCE)")
+    public ResponseEntity<ApiResponse<StaffSeatResponse>> toggleSeatMaintenance(@PathVariable Integer seatId) {
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ghế với ID: " + seatId));
+
+        if (seat.getStatus() == Seat.Status.ACTIVE) {
+            seat.setStatus(Seat.Status.MAINTENANCE);
+        } else {
+            seat.setStatus(Seat.Status.ACTIVE);
+        }
+        seatRepository.save(seat);
+
+        String message = seat.getStatus() == Seat.Status.MAINTENANCE
+                ? "Đã khóa ghế " + seat.getSeatCode() + " (Đưa vào bảo trì/hỏng)"
+                : "Đã mở khóa ghế " + seat.getSeatCode() + " (Sẵn sàng phục vụ khách)";
+
+        return ResponseEntity.ok(ApiResponse.success(message, toSeatResponse(seat)));
+    }
+
+    @PutMapping("/seats/{seatId}/status")
+    @Operation(summary = "Nhân viên cập nhật trạng thái chi tiết của ghế (ACTIVE, MAINTENANCE, INACTIVE)")
+    public ResponseEntity<ApiResponse<StaffSeatResponse>> updateSeatStatus(@PathVariable Integer seatId, @RequestParam Seat.Status status) {
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ghế với ID: " + seatId));
+
+        seat.setStatus(status);
+        seatRepository.save(seat);
+        return ResponseEntity.ok(ApiResponse.success("Đã cập nhật trạng thái ghế " + seat.getSeatCode(), toSeatResponse(seat)));
+    }
+
+    private StaffSeatResponse toSeatResponse(Seat s) {
+        return StaffSeatResponse.builder()
+                .seatId(s.getSeatId())
+                .seatCode(s.getSeatCode())
+                .rowName(s.getRowName())
+                .seatNumber(s.getSeatNumber())
+                .seatType(s.getSeatType().name())
+                .status(s.getStatus().name())
+                .roomId(s.getRoom() != null ? s.getRoom().getRoomId() : null)
+                .build();
+    }
+
     private Booking findBookingByCode(String code) {
         if (code == null || code.trim().isEmpty()) return null;
         String clean = code.trim().toUpperCase().replace("BK", "");
@@ -138,8 +265,14 @@ public class StaffController {
                 .build();
     }
 
+    // ==========================================
+    // DTOs
+    // ==========================================
+
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class CheckInTicketResponse {
         private String bookingRef;
         private String customerName;
@@ -155,5 +288,33 @@ public class StaffController {
         private String bookingStatus;
         private double totalAmount;
         private boolean isAllUsed;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StaffRoomResponse {
+        private Integer roomId;
+        private String roomName;
+        private String roomType;
+        private String cinemaName;
+        private int totalSeats;
+        private int maintenanceSeats;
+        private int inactiveSeats;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class StaffSeatResponse {
+        private Integer seatId;
+        private String seatCode;
+        private String rowName;
+        private Integer seatNumber;
+        private String seatType;
+        private String status;
+        private Integer roomId;
     }
 }

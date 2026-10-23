@@ -53,6 +53,9 @@ public class BookingServiceImpl implements BookingService {
             if (!seat.getRoom().getRoomId().equals(showtime.getRoom().getRoomId())) {
                 throw new AppException(400, "Ghế " + seat.getSeatCode() + " không thuộc phòng chiếu này");
             }
+            if (seat.getStatus() != Seat.Status.ACTIVE) {
+                throw new AppException(400, "Ghế " + seat.getSeatCode() + " đang được nhân viên khóa bảo trì, không thể đặt");
+            }
         }
 
         // KIỂM TRA XUNG ĐỘT GHẾ (Race Condition / Locking check)
@@ -114,6 +117,9 @@ public class BookingServiceImpl implements BookingService {
                 if (foodReq.getQuantity() != null && foodReq.getQuantity() > 0) {
                     Food food = foodRepository.findById(foodReq.getFoodId())
                             .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy bắp/nước ID: " + foodReq.getFoodId()));
+                    if (food.getStatus() != Food.Status.ACTIVE) {
+                        throw new AppException(400, "Món " + food.getFoodName() + " hiện đã hết hàng tại quầy rạp!");
+                    }
 
                     BigDecimal itemTotal = food.getPrice().multiply(new BigDecimal(foodReq.getQuantity()));
                     foodSubtotal = foodSubtotal.add(itemTotal);
