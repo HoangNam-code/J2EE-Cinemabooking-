@@ -67,6 +67,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/foods/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/cinemas/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/payments/vnpay-callback").permitAll()
+                        .requestMatchers("/api/v1/payments/payos-webhook", "/api/v1/payments/payos/**").permitAll()
                         .requestMatchers("/api/v1/ai/**").permitAll()
 
                         // Staff Check-in / Soát vé endpoints (Staff & Admin)

@@ -54,7 +54,7 @@ public class Payment {
     private LocalDateTime updatedAt;
 
     public enum Method {
-        CASH, BANKING, MOMO, VNPAY, CARD
+        CASH, BANKING, MOMO, VNPAY, CARD, PAYOS
     }
 
     public enum Status {

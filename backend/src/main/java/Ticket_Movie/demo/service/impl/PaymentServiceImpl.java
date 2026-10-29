@@ -31,6 +31,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final BookingService bookingService;
     private final VnpayConfig vnpayConfig;
+    private final Ticket_Movie.demo.service.PayOSService payOSService;
 
     @Override
     @Transactional
@@ -48,23 +49,33 @@ public class PaymentServiceImpl implements PaymentService {
             throw new AppException(400, "Thời gian giữ ghế đã hết hạn");
         }
 
-        Payment.Method method = Payment.Method.valueOf(methodStr.toUpperCase());
+        Payment.Method method;
+        try {
+            method = Payment.Method.valueOf(methodStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            method = Payment.Method.VNPAY;
+        }
+
+        // Lưu vào DB là BANKING để tương thích tuyệt đối với schema MySQL hiện có (enum CASH, BANKING, MOMO, VNPAY, CARD)
+        Payment.Method dbMethod = (method == Payment.Method.PAYOS) ? Payment.Method.BANKING : method;
 
         Payment payment = paymentRepository.findByBookingBookingId(bookingId)
                 .orElse(Payment.builder()
                         .booking(booking)
                         .amount(booking.getTotalAmount())
-                        .method(method)
+                        .method(dbMethod)
                         .status(Payment.Status.PENDING)
                         .build());
 
-        payment.setMethod(method);
+        payment.setMethod(dbMethod);
         payment.setAmount(booking.getTotalAmount());
         payment.setPaymentDate(LocalDateTime.now());
         payment = paymentRepository.save(payment);
 
         String paymentUrl = null;
-        if (method == Payment.Method.VNPAY) {
+        if (method == Payment.Method.PAYOS) {
+            return payOSService.createPaymentRequest(booking, payment);
+        } else if (method == Payment.Method.VNPAY) {
             paymentUrl = generateVnpayUrl(booking, payment, request);
         } else if (method == Payment.Method.CASH || method == Payment.Method.BANKING) {
             // Giả lập thanh toán trực tiếp thành công

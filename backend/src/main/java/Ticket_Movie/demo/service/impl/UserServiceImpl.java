@@ -1,5 +1,6 @@
 package Ticket_Movie.demo.service.impl;
 
+import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.response.AuthResponse;
@@ -9,6 +10,8 @@ import Ticket_Movie.demo.exception.ResourceNotFoundException;
 import Ticket_Movie.demo.repository.UserRepository;
 import Ticket_Movie.demo.security.JwtTokenProvider;
 import Ticket_Movie.demo.service.UserService;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -18,6 +21,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -26,6 +33,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
+    private final GoogleIdTokenVerifier googleIdTokenVerifier;
 
     @Override
     public AuthResponse login(LoginRequest request) {
@@ -96,13 +104,37 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public AuthResponse socialLogin(Ticket_Movie.demo.dto.request.SocialLoginRequest request) {
-        // Tìm kiếm tài khoản qua email
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+    public AuthResponse googleLogin(GoogleLoginRequest request) {
+        // 1. Xác minh ID Token với Google: chữ ký, issuer, audience (Client ID), hạn dùng
+        GoogleIdToken idToken;
+        try {
+            idToken = googleIdTokenVerifier.verify(request.getCredential());
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
+            throw new AppException(401, "Không thể xác minh tài khoản Google, vui lòng thử lại");
+        }
+        if (idToken == null) {
+            throw new AppException(401, "Google token không hợp lệ hoặc đã hết hạn");
+        }
+
+        // 2. Chỉ tin thông tin lấy từ token đã được Google ký
+        GoogleIdToken.Payload payload = idToken.getPayload();
+        String email = payload.getEmail();
+        if (email == null || !Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new AppException(401, "Email Google chưa được xác minh");
+        }
+        String name = (String) payload.get("name");
+
+        // 3. Tìm tài khoản theo email, chưa có thì tự động tạo tài khoản khách hàng
+        User user = userRepository.findByEmail(email).orElse(null);
 
         if (user == null) {
-            // Tự động đăng ký tài khoản khách hàng mới cho Google/Facebook user
-            String baseUsername = request.getEmail().split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
+            String baseUsername = email.split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
+            if (baseUsername.isEmpty()) {
+                baseUsername = "user";
+            }
+            if (baseUsername.length() > 40) {
+                baseUsername = baseUsername.substring(0, 40);
+            }
             String candidateUsername = baseUsername;
             int counter = 1;
             while (userRepository.existsByUsername(candidateUsername)) {
@@ -111,9 +143,9 @@ public class UserServiceImpl implements UserService {
 
             user = User.builder()
                     .username(candidateUsername)
-                    .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
-                    .fullName(request.getName() != null && !request.getName().trim().isEmpty() ? request.getName() : candidateUsername)
-                    .email(request.getEmail())
+                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .fullName(name != null && !name.isBlank() ? name : candidateUsername)
+                    .email(email)
                     .role(User.Role.CUSTOMER)
                     .status(User.Status.ACTIVE)
                     .build();

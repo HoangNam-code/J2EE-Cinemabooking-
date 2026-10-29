@@ -15,7 +15,9 @@
 	<description>Do an J2EE Dat ve xem phim</description>
 
 	<properties>
-		<java.version>17</java.version> <!-- Ho?c 21 t�y JDK m�y b?n c�i -->
+		<java.version>17</java.version>
+		<!-- 1.18.42 hỗ trợ build bằng JDK mới (24/25); 1.18.34 cũ gây lỗi "TypeTag :: UNKNOWN" -->
+		<lombok.version>1.18.42</lombok.version> <!-- Ho?c 21 t�y JDK m�y b?n c�i -->
 	</properties>
 
 	<dependencies>
@@ -84,6 +86,13 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
+		<!-- 8. Google Sign-In: xác minh Google ID Token -->
+		<dependency>
+			<groupId>com.google.api-client</groupId>
+			<artifactId>google-api-client</artifactId>
+			<version>2.7.0</version>
+		</dependency>
+
 		<!-- 6. Lombok & Devtools -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>
@@ -119,7 +128,7 @@
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
-							<version>1.18.34</version>
+							<version>${lombok.version}</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

@@ -22,6 +22,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final UserService userService;
+    private final Ticket_Movie.demo.service.PayOSService payOSService;
 
     @PostMapping("/create")
     @Operation(summary = "Tạo yêu cầu thanh toán (Hỗ trợ phương thức: VNPAY, BANKING, CASH, MOMO)")
@@ -39,5 +40,19 @@ public class PaymentController {
     public ResponseEntity<ApiResponse<PaymentResponse>> vnpayCallback(@RequestParam Map<String, String> params) {
         PaymentResponse response = paymentService.handleVnpayCallback(params);
         return ResponseEntity.ok(ApiResponse.success("Xử lý kết quả VNPAY thành công", response));
+    }
+
+    @GetMapping("/payos/status/{bookingId}")
+    @Operation(summary = "Kiểm tra trạng thái thanh toán PayOS theo bookingId (dùng cho frontend đếm ngược polling)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> checkPayOSStatus(@PathVariable Integer bookingId) {
+        Map<String, Object> result = payOSService.checkPaymentStatus(bookingId);
+        return ResponseEntity.ok(ApiResponse.success("OK", result));
+    }
+
+    @PostMapping("/payos-webhook")
+    @Operation(summary = "Tiếp nhận Webhook tức thời từ cổng PayOS khi khách chuyển khoản thành công")
+    public ResponseEntity<Map<String, Object>> payosWebhook(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> result = payOSService.handleWebhook(payload);
+        return ResponseEntity.ok(result);
     }
 }

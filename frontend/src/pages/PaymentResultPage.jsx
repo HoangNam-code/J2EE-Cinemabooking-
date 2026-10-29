@@ -12,8 +12,8 @@ export const PaymentResultPage = () => {
   const transactionNo = searchParams.get('vnp_TransactionNo');
   const method = searchParams.get('method');
 
-  // Success logic: vnp_ResponseCode === '00' OR method is CASH or BANKING
-  const isSuccess = responseCode === '00' || method === 'CASH' || method === 'BANKING';
+  // Success logic: vnp_ResponseCode === '00' OR method is CASH, BANKING, PAYOS
+  const isSuccess = responseCode === '00' || method === 'CASH' || method === 'BANKING' || method === 'PAYOS';
 
   const containerVariants = {
     hidden: { opacity: 0, y: 30 },
@@ -86,6 +86,8 @@ export const PaymentResultPage = () => {
             {isSuccess ? (
               method === 'CASH' ? (
                 'Đơn đặt vé đã được ghi nhận. Vui lòng thanh toán trực tiếp tại quầy vé CinePrime trước giờ chiếu 15 phút.'
+              ) : method === 'PAYOS' ? (
+                'Thanh toán chuyển khoản VietQR tự động thành công! Vé xem phim và mã QR check-in đã sẵn sàng.'
               ) : method === 'BANKING' ? (
                 'Đơn đặt vé đã được tiếp nhận qua kênh chuyển khoản ngân hàng. Vé điện tử đã sẵn sàng.'
               ) : (
