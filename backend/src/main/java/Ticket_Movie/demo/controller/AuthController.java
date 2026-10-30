@@ -1,5 +1,6 @@
 package Ticket_Movie.demo.controller;
 
+import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
@@ -11,19 +12,22 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
-@Tag(name = "Authentication", description = "Các API xác thực: Đăng nhập, Đăng ký, Gửi OTP")
+@Tag(name = "Authentication", description = "Các API xác thực: Đăng nhập, Đăng ký, Gửi OTP, Google OAuth2")
 public class AuthController {
 
     private final UserService userService;
+
+    @Value("${google.client-id:}")
+    private String googleClientId;
 
     @PostMapping("/login")
     @Operation(summary = "Đăng nhập tài khoản lấy JWT Token")
@@ -51,5 +55,18 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(@Valid @RequestBody SocialLoginRequest request) {
         AuthResponse response = userService.socialLogin(request);
         return ResponseEntity.ok(ApiResponse.success("Đăng nhập qua " + request.getProvider() + " thành công", response));
+    }
+
+    @GetMapping("/google/config")
+    @Operation(summary = "Lấy Google Client ID (public) để frontend khởi tạo nút Google Sign-In")
+    public ResponseEntity<ApiResponse<Map<String, String>>> googleConfig() {
+        return ResponseEntity.ok(ApiResponse.success("OK", Map.of("clientId", googleClientId)));
+    }
+
+    @PostMapping("/google")
+    @Operation(summary = "Đăng nhập bằng Google (gửi Google ID Token, backend xác minh với Google)")
+    public ResponseEntity<ApiResponse<AuthResponse>> googleLogin(@Valid @RequestBody GoogleLoginRequest request) {
+        AuthResponse response = userService.googleLogin(request);
+        return ResponseEntity.ok(ApiResponse.success("Đăng nhập bằng Google thành công", response));
     }
 }

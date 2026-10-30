@@ -1,5 +1,6 @@
 package Ticket_Movie.demo.service;
 
+import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
@@ -15,6 +16,7 @@ public interface UserService {
     String sendRegisterOtp(SendOtpRequest request);
     AuthResponse register(RegisterRequest request);
     AuthResponse socialLogin(SocialLoginRequest request);
+    AuthResponse googleLogin(GoogleLoginRequest request);
     User getCurrentUser();
     User getById(Integer userId);
 

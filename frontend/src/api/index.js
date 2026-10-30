@@ -4,7 +4,8 @@ export const authApi = {
   login: (data) => client.post('/auth/login', data),
   sendRegisterOtp: (data) => client.post('/auth/send-register-otp', data),
   register: (data) => client.post('/auth/register', data),
-  socialLogin: (data) => client.post('/auth/social-login', data),
+  getGoogleConfig: () => client.get('/auth/google/config'),
+  googleLogin: (credential) => client.post('/auth/google', { credential }),
 };
 
 export const movieApi = {
@@ -40,8 +41,10 @@ export const bookingApi = {
 };
 
 export const paymentApi = {
-  createPayment: (bookingId, method = 'VNPAY') => 
+  createPayment: (bookingId, method = 'VNPAY') =>
     client.post(`/payments/create?bookingId=${bookingId}&method=${method}`, {}),
+  checkPayOSStatus: (bookingId) =>
+    client.get(`/payments/payos/status/${bookingId}`),
 };
 
 export const staffApi = {

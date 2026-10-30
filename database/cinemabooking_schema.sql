@@ -275,7 +275,7 @@ CREATE TABLE `payments` (
   `PaymentID` int(11) NOT NULL AUTO_INCREMENT,
   `BookingID` int(11) NOT NULL,
   `Amount` decimal(12,2) NOT NULL,
-  `Method` enum('CASH','BANKING','MOMO','VNPAY','CARD') NOT NULL,
+  `Method` enum('CASH','BANKING','MOMO','VNPAY','CARD','PAYOS') NOT NULL,
   `PaymentDate` datetime DEFAULT CURRENT_TIMESTAMP,
   `TransactionID` varchar(100) DEFAULT NULL COMMENT 'Mã giao dịch từ cổng thanh toán',
   `Status` enum('PENDING','SUCCESS','FAILED','REFUNDED') NOT NULL DEFAULT 'PENDING',

@@ -1,10 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { User, Lock, Eye, EyeOff, AlertCircle, Film, Sparkles, Loader2, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { authApi } from '../api';
 import { useAuth } from '../store/AuthContext';
 import { SocialAuthModal } from '../components/auth/SocialAuthModal';
+
+const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
+
+// Nạp script Google Identity Services một lần duy nhất
+const loadGoogleScript = () =>
+  new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) return resolve();
+    let script = document.querySelector(`script[src="${GOOGLE_GSI_SRC}"]`);
+    if (!script) {
+      script = document.createElement('script');
+      script.src = GOOGLE_GSI_SRC;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', () => resolve());
+    script.addEventListener('error', () => reject(new Error('Không tải được Google Sign-In')));
+  });
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -14,11 +32,19 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Social Auth Modal State
+  // Social Auth Modal State (Facebook & Fallback)
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
-    provider: 'GOOGLE', // 'GOOGLE' | 'FACEBOOK'
+    provider: 'FACEBOOK', // 'GOOGLE' | 'FACEBOOK'
   });
+
+  const redirectAfterLogin = (data) => {
+    if (data.role === 'ADMIN' || data.role === 'STAFF') {
+      navigate('/admin');
+    } else {
+      navigate('/');
+    }
+  };
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -40,11 +66,7 @@ export const LoginPage = () => {
       const data = await authApi.login(form);
       login(data);
       toast.success(`Đăng nhập thành công! Chào mừng ${data.fullName || data.username}`);
-      if (data.role === 'ADMIN' || data.role === 'STAFF') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
+      redirectAfterLogin(data);
     } catch (err) {
       const msg = err.message || 'Tên đăng nhập hoặc mật khẩu không chính xác';
       setError(msg);
@@ -53,6 +75,68 @@ export const LoginPage = () => {
       setLoading(false);
     }
   };
+
+  // ===== Google Sign-In thật (Google Identity Services) =====
+  const googleBtnRef = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+
+  const handleGoogleCredential = async (response) => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await authApi.googleLogin(response.credential);
+      login(data);
+      toast.success(`Đăng nhập Google thành công! Chào mừng ${data.fullName || data.username}`);
+      redirectAfterLogin(data);
+    } catch (err) {
+      const msg = err.message || 'Đăng nhập bằng Google thất bại';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const googleCallbackRef = useRef(handleGoogleCredential);
+  googleCallbackRef.current = handleGoogleCredential;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const init = async () => {
+      try {
+        const { clientId } = await authApi.getGoogleConfig();
+        if (!clientId) {
+          console.warn('Chưa cấu hình GOOGLE_CLIENT_ID ở backend');
+          return;
+        }
+        await loadGoogleScript();
+        if (cancelled || !googleBtnRef.current) return;
+
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (res) => googleCallbackRef.current(res),
+          ux_mode: 'popup',
+        });
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'filled_black',
+          size: 'large',
+          shape: 'pill',
+          text: 'signin_with',
+          locale: 'vi',
+          width: Math.min(googleBtnRef.current.offsetWidth || 320, 400),
+        });
+        setGoogleReady(true);
+      } catch (err) {
+        console.error('Không khởi tạo được Google Sign-In:', err);
+      }
+    };
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleOpenSocialModal = (provider) => {
     setError('');
@@ -67,7 +151,6 @@ export const LoginPage = () => {
       setLoading(true);
       setError('');
 
-      // Send social profile to backend API
       const data = await authApi.socialLogin({
         provider: socialData.provider,
         email: socialData.email,
@@ -78,12 +161,7 @@ export const LoginPage = () => {
 
       login(data);
       toast.success(`Đăng nhập thành công với tài khoản ${socialData.provider}! Chào mừng ${data.fullName || data.username}`);
-
-      if (data.role === 'ADMIN' || data.role === 'STAFF') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
+      redirectAfterLogin(data);
     } catch (err) {
       const msg = err.message || `Đăng nhập qua ${socialData.provider} thất bại`;
       setError(msg);
@@ -213,7 +291,7 @@ export const LoginPage = () => {
 
           </form>
 
-          {/* Social Logins: Google & Facebook */}
+          {/* Social Login Options */}
           <div className="mt-6">
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-neutral-800"></div>
@@ -223,46 +301,29 @@ export const LoginPage = () => {
               <div className="flex-grow border-t border-neutral-800"></div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              {/* Google Login Button */}
-              <button
-                type="button"
-                onClick={() => handleOpenSocialModal('GOOGLE')}
-                disabled={loading}
-                className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-xl text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>Google</span>
-              </button>
+            <div className="flex flex-col gap-3 mt-3">
+              {/* Google Sign-In Button (Official Google Identity Services) */}
+              <div className={`relative w-full flex justify-center min-h-[44px] ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div ref={googleBtnRef} className="w-full flex justify-center" />
+                {!googleReady && (
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs text-neutral-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Đang tải Google Sign-In...</span>
+                  </div>
+                )}
+              </div>
 
               {/* Facebook Login Button */}
               <button
                 type="button"
                 onClick={() => handleOpenSocialModal('FACEBOOK')}
                 disabled={loading}
-                className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-xl text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
+                className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-full text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
               >
                 <svg className="w-4 h-4 shrink-0 fill-[#1877F2]" viewBox="0 0 24 24">
                   <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
                 </svg>
-                <span>Facebook</span>
+                <span>Đăng nhập với Facebook</span>
               </button>
             </div>
           </div>
@@ -291,3 +352,5 @@ export const LoginPage = () => {
     </div>
   );
 };
+
+export default LoginPage;

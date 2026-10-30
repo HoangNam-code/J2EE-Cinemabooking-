@@ -1,5 +1,6 @@
 package Ticket_Movie.demo.service.impl;
 
+import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
@@ -14,6 +15,8 @@ import Ticket_Movie.demo.security.JwtTokenProvider;
 import Ticket_Movie.demo.service.EmailService;
 import Ticket_Movie.demo.service.OtpService;
 import Ticket_Movie.demo.service.UserService;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -23,7 +26,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +43,7 @@ public class UserServiceImpl implements UserService {
     private final JwtTokenProvider tokenProvider;
     private final OtpService otpService;
     private final EmailService emailService;
+    private final GoogleIdTokenVerifier googleIdTokenVerifier;
 
     @Override
     public AuthResponse login(LoginRequest request) {
@@ -143,6 +150,12 @@ public class UserServiceImpl implements UserService {
         if (user == null) {
             // Tự động đăng ký tài khoản khách hàng mới cho Google/Facebook user
             String baseUsername = request.getEmail().split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
+            if (baseUsername.isEmpty()) {
+                baseUsername = "user";
+            }
+            if (baseUsername.length() > 40) {
+                baseUsername = baseUsername.substring(0, 40);
+            }
             String candidateUsername = baseUsername;
             int counter = 1;
             while (userRepository.existsByUsername(candidateUsername)) {
@@ -151,9 +164,77 @@ public class UserServiceImpl implements UserService {
 
             user = User.builder()
                     .username(candidateUsername)
-                    .passwordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
+                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
                     .fullName(request.getName() != null && !request.getName().trim().isEmpty() ? request.getName() : candidateUsername)
                     .email(request.getEmail())
+                    .role(User.Role.CUSTOMER)
+                    .status(User.Status.ACTIVE)
+                    .build();
+
+            user = userRepository.save(user);
+        }
+
+        if (user.getStatus() != User.Status.ACTIVE) {
+            throw new AppException(403, "Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động");
+        }
+
+        String token = tokenProvider.generateTokenFromUsername(user.getUsername());
+
+        return AuthResponse.builder()
+                .token(token)
+                .tokenType("Bearer")
+                .userId(user.getUserId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .role(user.getRole().name())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse googleLogin(GoogleLoginRequest request) {
+        // 1. Xác minh ID Token với Google: chữ ký, issuer, audience (Client ID), hạn dùng
+        GoogleIdToken idToken;
+        try {
+            idToken = googleIdTokenVerifier.verify(request.getCredential());
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException e) {
+            throw new AppException(401, "Không thể xác minh tài khoản Google, vui lòng thử lại");
+        }
+        if (idToken == null) {
+            throw new AppException(401, "Google token không hợp lệ hoặc đã hết hạn");
+        }
+
+        // 2. Chỉ tin thông tin lấy từ token đã được Google ký
+        GoogleIdToken.Payload payload = idToken.getPayload();
+        String email = payload.getEmail();
+        if (email == null || !Boolean.TRUE.equals(payload.getEmailVerified())) {
+            throw new AppException(401, "Email Google chưa được xác minh");
+        }
+        String name = (String) payload.get("name");
+
+        // 3. Tìm tài khoản theo email, chưa có thì tự động tạo tài khoản khách hàng
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        if (user == null) {
+            String baseUsername = email.split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
+            if (baseUsername.isEmpty()) {
+                baseUsername = "user";
+            }
+            if (baseUsername.length() > 40) {
+                baseUsername = baseUsername.substring(0, 40);
+            }
+            String candidateUsername = baseUsername;
+            int counter = 1;
+            while (userRepository.existsByUsername(candidateUsername)) {
+                candidateUsername = baseUsername + counter++;
+            }
+
+            user = User.builder()
+                    .username(candidateUsername)
+                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .fullName(name != null && !name.isBlank() ? name : candidateUsername)
+                    .email(email)
                     .role(User.Role.CUSTOMER)
                     .status(User.Status.ACTIVE)
                     .build();
