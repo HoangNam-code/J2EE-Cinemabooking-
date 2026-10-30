@@ -28,9 +28,9 @@ Hệ thống được thiết kế và hoàn thiện vượt mức các tiêu ch
 
 | STT | Yêu cầu đồ án | Tình trạng | Giải pháp công nghệ & Hiện thực |
 | :---: | :--- | :---: | :--- |
-| **1** | **Login Gmail / Facebook & OTP Email** | ✅ Hoàn thành | Đăng nhập Google & Facebook OAuth thực tế; Gửi mã xác thực **OTP 6 chữ số** về Email người dùng qua **Spring Email** trước khi hoàn tất tạo tài khoản. |
+| **1** | **Login Gmail / Facebook & OTP Email** | ✅ Hoàn thành | Đăng nhập Google Sign-In chính thức (xác thực Google ID Token qua Google Identity Services) & Facebook OAuth; Gửi mã xác thực **OTP 6 chữ số** về Email người dùng qua **Spring Email** trước khi hoàn tất tạo tài khoản. |
 | **2** | **Phân quyền người dùng (Tối thiểu 3 nhóm)** | ✅ Hoàn thành | Hệ thống RBAC 3 cấp độ: `ADMIN` (Quản trị toàn diện), `STAFF` (Vận hành rạp: Soát vé, kho bắp nước, khóa ghế), `CUSTOMER` (Khách đặt vé, xem QR vé). Bảo mật cả Backend Spring Security và Frontend Route Guards. |
-| **3** | **Thanh toán trực tuyến VNPay / Ví MoMo** | ✅ Hoàn thành | Tích hợp cổng thanh toán **VNPay Sandbox**, tính toán chữ ký số bảo mật SHA512 (Checksum), IPN URL Callback xác nhận giao dịch tự động. |
+| **3** | **Thanh toán trực tuyến VNPay / VietQR PayOS / MoMo** | ✅ Hoàn thành | Tích hợp đa cổng thanh toán: Cổng **VNPay Sandbox** (chữ ký số SHA512) và Cổng **VietQR PayOS** quét mã QR chuyển khoản ngân hàng tự động kèm Webhook IPN đồng bộ trạng thái đơn vé thời gian thực. |
 | **4** | **Làm việc với DB qua Spring Data JPA** | ✅ Hoàn thành | 13 Thực thể JPA Entity, Composite Key (`@Embeddable` & `@EmbeddedId`), JPQL Queries, quan hệ One-to-Many / Many-to-Many, Transaction Isolation `SERIALIZABLE` chống xung đột giữ ghế. |
 | **5** | **Gửi email bằng Spring Email** | ✅ Hoàn thành | Tích hợp `JavaMailSender`, gửi mail bất đồng bộ (Non-blocking Async) qua SMTP Gmail: gửi mã OTP đăng ký, gửi vé điện tử kèm **hình ảnh mã QR Code** sau khi thanh toán, gửi thông báo hủy vé. |
 | **6** | **Tổ chức dự án (Frontend + Backend riêng)** | ✅ Hoàn thành | Dự án phân tách hoàn toàn thành 2 module độc lập: `/backend` (Maven, Spring Boot) và `/frontend` (Vite, React), giao tiếp qua RESTful JSON API và GraphQL. |
@@ -175,8 +175,8 @@ CinemaBooking_Project/
 - **Core:** Java 17, Spring Boot 3.3.4 (Spring Web, Spring Security, Spring Data JPA, Spring Mail).
 - **Seminar Công Nghệ:** Spring for GraphQL (Truy vấn dữ liệu hiệu năng cao).
 - **Cơ Sở Dữ Liệu:** MySQL 8.0, Hibernate ORM 6.5, HikariCP Connection Pool.
-- **Bảo Mật:** JSON Web Token (JWT Bearer Stateless), BCrypt Password Encoder.
-- **Thanh Toán:** VNPay Payment Gateway (Chữ ký điện tử SHA512).
+- **Bảo Mật:** JSON Web Token (JWT Bearer Stateless), BCrypt Password Encoder, Google API Client (`google-api-client 2.7.0`).
+- **Thanh Toán:** Đa kênh trực tuyến gồm VNPay Payment Gateway (Chữ ký điện tử SHA512) & VietQR PayOS (Chữ ký HMAC-SHA256, chuyển khoản ngân hàng tự động).
 - **Trí Tuệ Nhân Tạo:** Google Gemini API Client (Trợ lý CineAI).
 - **Tài Liệu Hóa API:** Springdoc OpenAPI & Swagger UI.
 
