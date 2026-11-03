@@ -1,8 +1,10 @@
 package Ticket_Movie.demo.controller;
 
+import Ticket_Movie.demo.dto.request.MovieCreateRequest;
 import Ticket_Movie.demo.dto.response.ApiResponse;
 import Ticket_Movie.demo.dto.response.MovieDetailResponse;
 import Ticket_Movie.demo.service.MovieService;
+import Ticket_Movie.demo.entity.Movie;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -47,5 +49,34 @@ public class MovieController {
     @Operation(summary = "Tìm kiếm phim theo tên hoặc thể loại")
     public ResponseEntity<ApiResponse<List<MovieDetailResponse>>> searchMovies(@RequestParam(required = false) String q) {
         return ResponseEntity.ok(ApiResponse.success(movieService.searchMovies(q)));
+    }
+
+    // Varible tự động lấy id từ url,request body gom file Json của front-end thành một object
+    @GetMapping
+    public ResponseEntity<List<MovieDetailResponse>> getAllMovie() {
+        return ResponseEntity.ok(movieService.getAllMovies());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<MovieDetailResponse> getMovieById(int id) {
+        return ResponseEntity.ok(movieService.getMovieById(id));
+    }
+
+    @PostMapping
+    public ResponseEntity<MovieDetailResponse> createMovie(@RequestBody MovieCreateRequest movie) {
+        MovieDetailResponse movieCreated = movieService.createMovie(movie);
+        return ResponseEntity.ok(movieCreated);
+    }
+
+    @PutMapping
+    public ResponseEntity<MovieDetailResponse> updateMovie(@PathVariable Integer movieId,@RequestBody MovieCreateRequest movie) {
+        MovieDetailResponse updateMovie = movieService.updateMovie(movieId,movie);
+        return ResponseEntity.ok(updateMovie);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<String> deleteMovie(@PathVariable Integer movieId) {
+        movieService.deleteMovie(movieId);
+        return ResponseEntity.ok("Đã xóa thành công phim với ID: " + movieId);
     }
 }

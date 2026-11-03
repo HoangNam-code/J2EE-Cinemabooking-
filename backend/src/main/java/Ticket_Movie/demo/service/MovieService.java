@@ -14,6 +14,9 @@ public interface MovieService {
     List<MovieDetailResponse> searchMovies(String query);
 
     MovieDetailResponse createMovie(MovieCreateRequest request);
-    MovieDetailResponse updateMovie(Integer movieId, MovieCreateRequest request);
+
+  MovieDetailResponse updateMovie(Integer movieId, MovieCreateRequest request);
+
+
     void deleteMovie(Integer movieId);
 }
