@@ -11,6 +11,7 @@ public interface BookingService {
     BookingSummaryResponse createHoldBooking(BookingCreateRequest request, User user);
     BookingSummaryResponse getBookingSummary(Integer bookingId);
     List<BookingSummaryResponse> getUserBookings(Integer userId);
+    List<BookingSummaryResponse> getAllBookings();
     void cancelBooking(Integer bookingId, User user);
     void confirmBookingPayment(Integer bookingId, String transactionId);
 }

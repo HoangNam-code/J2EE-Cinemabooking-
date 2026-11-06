@@ -1,12 +1,14 @@
 package Ticket_Movie.demo.controller.admin;
 
 import Ticket_Movie.demo.dto.response.ApiResponse;
+import Ticket_Movie.demo.dto.response.BookingSummaryResponse;
 import Ticket_Movie.demo.entity.Booking;
 import Ticket_Movie.demo.entity.Ticket;
 import Ticket_Movie.demo.repository.BookingRepository;
 import Ticket_Movie.demo.repository.MovieRepository;
 import Ticket_Movie.demo.repository.TicketRepository;
 import Ticket_Movie.demo.repository.UserRepository;
+import Ticket_Movie.demo.service.BookingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Builder;
@@ -33,6 +35,13 @@ public class AdminStatsController {
     private final TicketRepository ticketRepository;
     private final MovieRepository movieRepository;
     private final UserRepository userRepository;
+    private final BookingService bookingService;
+
+    @GetMapping("/bookings")
+    @Operation(summary = "Lấy danh sách toàn bộ đơn đặt vé (mới nhất lên đầu) cho trang Admin")
+    public ResponseEntity<ApiResponse<List<BookingSummaryResponse>>> getAllBookings() {
+        return ResponseEntity.ok(ApiResponse.success(bookingService.getAllBookings()));
+    }
 
     @GetMapping
     @Operation(summary = "Lấy báo cáo tổng hợp: doanh thu, tổng số vé, người dùng và phim")
