@@ -4,7 +4,6 @@ import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
-import Ticket_Movie.demo.dto.request.SocialLoginRequest;
 import Ticket_Movie.demo.dto.response.AuthResponse;
 import Ticket_Movie.demo.dto.response.UserResponse;
 import Ticket_Movie.demo.entity.User;
@@ -107,15 +106,6 @@ public class UserServiceImpl implements UserService {
             throw new AppException(400, "Email đã được sử dụng bởi tài khoản khác");
         }
 
-        // Kiểm tra mã OTP
-        boolean isOtpValid = otpService.verifyOtp(request.getEmail(), request.getOtp());
-        if (!isOtpValid) {
-            throw new AppException(400, "Mã xác thực OTP không chính xác hoặc đã hết hiệu lực (5 phút). Vui lòng thử lại!");
-        }
-
-        // Xóa mã OTP sau khi xác minh thành công
-        otpService.clearOtp(request.getEmail());
-
         User user = User.builder()
                 .username(request.getUsername())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
@@ -127,56 +117,6 @@ public class UserServiceImpl implements UserService {
                 .build();
 
         user = userRepository.save(user);
-
-        String token = tokenProvider.generateTokenFromUsername(user.getUsername());
-
-        return AuthResponse.builder()
-                .token(token)
-                .tokenType("Bearer")
-                .userId(user.getUserId())
-                .username(user.getUsername())
-                .fullName(user.getFullName())
-                .email(user.getEmail())
-                .role(user.getRole().name())
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public AuthResponse socialLogin(SocialLoginRequest request) {
-        // Tìm kiếm tài khoản qua email
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
-
-        if (user == null) {
-            // Tự động đăng ký tài khoản khách hàng mới cho Google/Facebook user
-            String baseUsername = request.getEmail().split("@")[0].replaceAll("[^a-zA-Z0-9_]", "");
-            if (baseUsername.isEmpty()) {
-                baseUsername = "user";
-            }
-            if (baseUsername.length() > 40) {
-                baseUsername = baseUsername.substring(0, 40);
-            }
-            String candidateUsername = baseUsername;
-            int counter = 1;
-            while (userRepository.existsByUsername(candidateUsername)) {
-                candidateUsername = baseUsername + counter++;
-            }
-
-            user = User.builder()
-                    .username(candidateUsername)
-                    .passwordHash(passwordEncoder.encode(UUID.randomUUID().toString()))
-                    .fullName(request.getName() != null && !request.getName().trim().isEmpty() ? request.getName() : candidateUsername)
-                    .email(request.getEmail())
-                    .role(User.Role.CUSTOMER)
-                    .status(User.Status.ACTIVE)
-                    .build();
-
-            user = userRepository.save(user);
-        }
-
-        if (user.getStatus() != User.Status.ACTIVE) {
-            throw new AppException(403, "Tài khoản của bạn đã bị khóa hoặc ngừng hoạt động");
-        }
 
         String token = tokenProvider.generateTokenFromUsername(user.getUsername());
 

@@ -53,4 +53,11 @@ public class BookingController {
         bookingService.cancelBooking(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn đặt vé thành công", null));
     }
+
+    @PostMapping("/{id}/send-email")
+    @Operation(summary = "Gửi email vé điện tử và biên lai cho đơn hàng đã thanh toán thành công")
+    public ResponseEntity<ApiResponse<String>> sendTicketEmail(@PathVariable Integer id) {
+        bookingService.sendTicketEmailIfPaid(id);
+        return ResponseEntity.ok(ApiResponse.success("Đã gửi vé điện tử về email khách hàng", "EMAIL_SENT"));
+    }
 }

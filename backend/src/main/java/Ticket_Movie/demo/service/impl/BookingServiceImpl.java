@@ -234,19 +234,27 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking ID: " + bookingId));
 
-        boolean alreadyPaid = (booking.getStatus() == Booking.Status.PAID);
         booking.setStatus(Booking.Status.PAID);
         for (Ticket t : booking.getTickets()) {
             t.setStatus(Ticket.Status.VALID);
         }
         bookingRepository.save(booking);
 
-        // Chỉ gửi email vé điện tử HTML kèm mã QR check-in 1 lần duy nhất khi đơn vừa chuyển sang PAID
-        if (!alreadyPaid) {
-            try {
-                emailService.sendBookingConfirmationEmail(booking);
-            } catch (Exception ignored) {}
+        // Gửi email vé điện tử HTML kèm mã QR check-in và bảng giá chi tiết
+        try {
+            emailService.sendBookingConfirmationEmail(booking);
+        } catch (Exception ignored) {}
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void sendTicketEmailIfPaid(Integer bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking ID: " + bookingId));
+        if (booking.getStatus() != Booking.Status.PAID) {
+            throw new AppException(400, "Đơn hàng chưa được thanh toán, không thể gửi vé điện tử");
         }
+        emailService.sendBookingConfirmationEmail(booking);
     }
 
     private BookingSummaryResponse mapToSummary(Booking booking, Showtime showtime, BigDecimal ticketSubtotal, BigDecimal foodSubtotal, String promoCode, BigDecimal discountAmount) {
@@ -255,6 +263,9 @@ public class BookingServiceImpl implements BookingService {
             remainingSeconds = Math.max(0, Duration.between(LocalDateTime.now(), booking.getExpiresAt()).getSeconds());
         }
 
+        // CHỈ trả về mã QR vé khi đơn hàng ĐÃ THANH TOÁN (PAID)
+        boolean isPaid = (booking.getStatus() == Booking.Status.PAID);
+
         List<BookingSummaryResponse.TicketItem> ticketItems = booking.getTickets().stream().map(t ->
                 BookingSummaryResponse.TicketItem.builder()
                         .ticketId(t.getTicketId())
@@ -262,7 +273,7 @@ public class BookingServiceImpl implements BookingService {
                         .seatCode(t.getSeat().getSeatCode())
                         .seatType(t.getSeat().getSeatType().name())
                         .price(t.getPrice())
-                        .qrCode(t.getQrCode())
+                        .qrCode(isPaid ? t.getQrCode() : null)
                         .build()
         ).collect(Collectors.toList());
 

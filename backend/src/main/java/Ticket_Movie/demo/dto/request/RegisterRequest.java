@@ -26,6 +26,5 @@ public class RegisterRequest {
 
     private String phone;
 
-    @NotBlank(message = "Mã xác thực OTP không được để trống")
     private String otp;
 }

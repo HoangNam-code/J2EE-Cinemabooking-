@@ -4,7 +4,6 @@ import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
-import Ticket_Movie.demo.dto.request.SocialLoginRequest;
 import Ticket_Movie.demo.dto.response.AuthResponse;
 import Ticket_Movie.demo.dto.response.UserResponse;
 import Ticket_Movie.demo.entity.User;
@@ -15,7 +14,6 @@ public interface UserService {
     AuthResponse login(LoginRequest request);
     String sendRegisterOtp(SendOtpRequest request);
     AuthResponse register(RegisterRequest request);
-    AuthResponse socialLogin(SocialLoginRequest request);
     AuthResponse googleLogin(GoogleLoginRequest request);
     User getCurrentUser();
     User getById(Integer userId);

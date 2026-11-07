@@ -38,10 +38,11 @@ export const bookingApi = {
   getSummary: (bookingId) => client.get(`/bookings/${bookingId}`),
   getMyBookings: () => client.get('/bookings/my-bookings'),
   cancel: (bookingId) => client.post(`/bookings/${bookingId}/cancel`, {}),
+  sendTicketEmail: (bookingId) => client.post(`/bookings/${bookingId}/send-email`, {}),
 };
 
 export const paymentApi = {
-  createPayment: (bookingId, method = 'VNPAY') =>
+  createPayment: (bookingId, method = 'PAYOS') =>
     client.post(`/payments/create?bookingId=${bookingId}&method=${method}`, {}),
   checkPayOSStatus: (bookingId) =>
     client.get(`/payments/payos/status/${bookingId}`),

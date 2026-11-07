@@ -24,7 +24,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +36,9 @@ public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
     private final PaymentRepository paymentRepository;
+
+    // Lưu thời điểm gửi mail gần nhất của từng bookingId để chống gửi trùng khi polling/webhook gọi đồng thời
+    private final Map<Integer, Long> recentSentBookings = new ConcurrentHashMap<>();
 
     @Value("${spring.mail.username:no-reply@cineprime.vn}")
     private String fromEmail;
@@ -55,6 +60,15 @@ public class EmailServiceImpl implements EmailService {
         if (booking == null || booking.getUser() == null || booking.getUser().getEmail() == null) {
             log.warn("Không tìm thấy email người nhận cho Booking ID: {}", booking != null ? booking.getBookingId() : null);
             return;
+        }
+
+        if (booking.getBookingId() != null) {
+            Long lastSent = recentSentBookings.get(booking.getBookingId());
+            if (lastSent != null && (System.currentTimeMillis() - lastSent) < 15000) {
+                log.info("Email xác nhận cho đơn #{} vừa được gửi, bỏ qua gửi trùng.", booking.getBookingId());
+                return;
+            }
+            recentSentBookings.put(booking.getBookingId(), System.currentTimeMillis());
         }
 
         // 1. Trích xuất toàn bộ dữ liệu ngay trên luồng Transaction hiện tại để tránh LazyInitializationException
@@ -361,7 +375,10 @@ public class EmailServiceImpl implements EmailService {
                 log.info("📧 [MAIL SENT] Đã gửi email vé điện tử & biên lai #{} tới {}", bookingRef, recipientEmail);
 
             } catch (Exception e) {
-                log.warn("⚠️ Không thể gửi email xác nhận đặt vé tới {}: {}", recipientEmail, e.getMessage());
+                if (bookingId != null) {
+                    recentSentBookings.remove(bookingId);
+                }
+                log.error("⚠️ Không thể gửi email xác nhận đặt vé tới {}: {}", recipientEmail, e.getMessage(), e);
             }
         });
     }

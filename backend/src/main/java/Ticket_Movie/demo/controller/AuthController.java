@@ -4,7 +4,6 @@ import Ticket_Movie.demo.dto.request.GoogleLoginRequest;
 import Ticket_Movie.demo.dto.request.LoginRequest;
 import Ticket_Movie.demo.dto.request.RegisterRequest;
 import Ticket_Movie.demo.dto.request.SendOtpRequest;
-import Ticket_Movie.demo.dto.request.SocialLoginRequest;
 import Ticket_Movie.demo.dto.response.ApiResponse;
 import Ticket_Movie.demo.dto.response.AuthResponse;
 import Ticket_Movie.demo.service.UserService;
@@ -48,13 +47,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = userService.register(request);
         return ResponseEntity.ok(ApiResponse.success("Đăng ký và xác thực tài khoản thành công", response));
-    }
-
-    @PostMapping("/social-login")
-    @Operation(summary = "Đăng nhập nhanh qua Google hoặc Facebook OAuth2")
-    public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(@Valid @RequestBody SocialLoginRequest request) {
-        AuthResponse response = userService.socialLogin(request);
-        return ResponseEntity.ok(ApiResponse.success("Đăng nhập qua " + request.getProvider() + " thành công", response));
     }
 
     @GetMapping("/google/config")

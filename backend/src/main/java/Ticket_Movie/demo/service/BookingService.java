@@ -14,4 +14,5 @@ public interface BookingService {
     List<BookingSummaryResponse> getAllBookings();
     void cancelBooking(Integer bookingId, User user);
     void confirmBookingPayment(Integer bookingId, String transactionId);
+    void sendTicketEmailIfPaid(Integer bookingId);
 }

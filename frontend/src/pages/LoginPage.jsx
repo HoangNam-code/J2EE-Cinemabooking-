@@ -4,7 +4,6 @@ import { User, Lock, Eye, EyeOff, AlertCircle, Film, Sparkles, Loader2, ArrowRig
 import { toast } from 'sonner';
 import { authApi } from '../api';
 import { useAuth } from '../store/AuthContext';
-import { SocialAuthModal } from '../components/auth/SocialAuthModal';
 
 const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
@@ -31,12 +30,6 @@ export const LoginPage = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  // Social Auth Modal State (Facebook & Fallback)
-  const [socialModal, setSocialModal] = useState({
-    isOpen: false,
-    provider: 'FACEBOOK', // 'GOOGLE' | 'FACEBOOK'
-  });
 
   const redirectAfterLogin = (data) => {
     if (data.role === 'ADMIN' || data.role === 'STAFF') {
@@ -138,40 +131,6 @@ export const LoginPage = () => {
     };
   }, []);
 
-  const handleOpenSocialModal = (provider) => {
-    setError('');
-    setSocialModal({
-      isOpen: true,
-      provider,
-    });
-  };
-
-  const handleSocialLoginSuccess = async (socialData) => {
-    try {
-      setLoading(true);
-      setError('');
-
-      const data = await authApi.socialLogin({
-        provider: socialData.provider,
-        email: socialData.email,
-        name: socialData.name,
-        providerId: socialData.providerId || `${socialData.provider.toLowerCase()}_${Date.now()}`,
-        avatarUrl: socialData.avatarUrl || '',
-      });
-
-      login(data);
-      toast.success(`Đăng nhập thành công với tài khoản ${socialData.provider}! Chào mừng ${data.fullName || data.username}`);
-      redirectAfterLogin(data);
-    } catch (err) {
-      const msg = err.message || `Đăng nhập qua ${socialData.provider} thất bại`;
-      setError(msg);
-      toast.error(msg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#0b0c10] text-neutral-100 flex flex-col justify-center items-center px-4 py-12 relative overflow-hidden">
       {/* Background Glow */}
@@ -239,14 +198,9 @@ export const LoginPage = () => {
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-mono text-neutral-400 uppercase">
-                  Mật Khẩu
-                </label>
-                <span className="text-[11px] text-neutral-500 font-mono">
-                  Mặc định: 123456
-                </span>
-              </div>
+              <label className="block text-xs font-mono text-neutral-400 uppercase mb-1.5">
+                Mật Khẩu
+              </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
                   <Lock className="w-4 h-4" />
@@ -291,7 +245,7 @@ export const LoginPage = () => {
 
           </form>
 
-          {/* Social Login Options */}
+          {/* Social Login: Google Only */}
           <div className="mt-6">
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-neutral-800"></div>
@@ -312,19 +266,6 @@ export const LoginPage = () => {
                   </div>
                 )}
               </div>
-
-              {/* Facebook Login Button */}
-              <button
-                type="button"
-                onClick={() => handleOpenSocialModal('FACEBOOK')}
-                disabled={loading}
-                className="w-full py-2.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700/80 rounded-full text-xs font-semibold text-neutral-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-neutral-500"
-              >
-                <svg className="w-4 h-4 shrink-0 fill-[#1877F2]" viewBox="0 0 24 24">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
-                <span>Đăng nhập với Facebook</span>
-              </button>
             </div>
           </div>
 
@@ -341,14 +282,6 @@ export const LoginPage = () => {
 
         </div>
       </div>
-
-      {/* Social Auth Modal */}
-      <SocialAuthModal
-        isOpen={socialModal.isOpen}
-        provider={socialModal.provider}
-        onClose={() => setSocialModal((prev) => ({ ...prev, isOpen: false }))}
-        onSuccess={handleSocialLoginSuccess}
-      />
     </div>
   );
 };

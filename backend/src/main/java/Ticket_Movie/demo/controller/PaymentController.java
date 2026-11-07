@@ -43,7 +43,7 @@ public class PaymentController {
     }
 
     @GetMapping("/payos/status/{bookingId}")
-    @Operation(summary = "Kiểm tra trạng thái thanh toán PayOS theo bookingId (dùng cho frontend đếm ngược polling)")
+    @Operation(summary = "Kiểm tra trạng thái thanh toán PayOS theo bookingId (dùng cho frontend chạy ngầm polling)")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkPayOSStatus(@PathVariable Integer bookingId) {
         Map<String, Object> result = payOSService.checkPaymentStatus(bookingId);
         return ResponseEntity.ok(ApiResponse.success("OK", result));

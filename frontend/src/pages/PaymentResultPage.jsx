@@ -21,9 +21,10 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
-import { bookingApi } from '../api';
+import { bookingApi, paymentApi } from '../api';
 import { MovieImage } from '../components/common/MovieImage';
 import { TicketPassModal } from '../components/booking/TicketPassModal';
+import { toast } from 'sonner';
 
 const formatVND = (price) => {
   return new Intl.NumberFormat('vi-VN').format(price || 0) + ' ₫';
@@ -34,35 +35,54 @@ export const PaymentResultPage = () => {
   const navigate = useNavigate();
 
   const responseCode = searchParams.get('vnp_ResponseCode');
-  const bookingId = searchParams.get('vnp_TxnRef');
+  const bookingId = searchParams.get('vnp_TxnRef') || searchParams.get('bookingId');
   const transactionNo = searchParams.get('vnp_TransactionNo');
-  const method = searchParams.get('method');
+  const method = searchParams.get('method') || 'PAYOS';
   const isCancelled = searchParams.get('cancel') === 'true';
 
-  // Success logic: vnp_ResponseCode === '00' OR method is CASH, BANKING, PAYOS (unless cancelled)
-  const isSuccess =
-    !isCancelled &&
-    (responseCode === '00' || method === 'CASH' || method === 'BANKING' || method === 'PAYOS');
-
   const [booking, setBooking] = useState(null);
-  const [loadingBooking, setLoadingBooking] = useState(false);
+  const [loadingBooking, setLoadingBooking] = useState(Boolean(bookingId));
   const [showPassModal, setShowPassModal] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+
+  // CHỈ coi là thành công và hiển thị vé khi đơn hàng trong DB thực sự ở trạng thái PAID
+  const isSuccess = !isCancelled && booking?.status === 'PAID';
 
   useEffect(() => {
-    if (bookingId && isSuccess) {
-      fetchBookingDetail();
+    if (bookingId) {
+      verifyAndFetchBooking();
     }
-  }, [bookingId, isSuccess]);
+  }, [bookingId]);
 
-  const fetchBookingDetail = async () => {
+  const verifyAndFetchBooking = async () => {
     try {
       setLoadingBooking(true);
+      // 1. Đối chiếu trực tiếp với PayOS xem tiền đã thực sự vào tài khoản chưa
+      await paymentApi.checkPayOSStatus(bookingId).catch(() => null);
+      // 2. Lấy thông tin đơn hàng từ Database
       const data = await bookingApi.getSummary(bookingId);
       setBooking(data);
+      // 3. Nếu đơn đã PAID, đảm bảo gửi Email vé điện tử về hộp thư khách hàng
+      if (data && data.status === 'PAID') {
+        bookingApi.sendTicketEmail(bookingId).catch(() => null);
+      }
     } catch (err) {
       console.error('Không thể tải chi tiết vé sau thanh toán:', err);
     } finally {
       setLoadingBooking(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!bookingId || resendingEmail) return;
+    try {
+      setResendingEmail(true);
+      await bookingApi.sendTicketEmail(bookingId);
+      toast.success(`Đã gửi lại vé điện tử tới ${booking?.customerEmail || 'email của bạn'}!`);
+    } catch (err) {
+      toast.error(err.message || 'Không thể gửi email lúc này');
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -140,22 +160,32 @@ export const PaymentResultPage = () => {
 
           {/* Email notification banner when success */}
           {isSuccess && booking?.customerEmail && (
-            <div className="w-full mb-6 px-4 py-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-center gap-2">
-              <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>
-                Vé điện tử, bảng kê chi tiết giá tiền và mã QR đã được gửi tới email:{' '}
-                <strong className="text-white">{booking.customerEmail}</strong>
-              </span>
+            <div className="w-full mb-6 px-4 py-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>
+                  Vé điện tử, bảng kê giá tiền và mã QR đã được gửi tới:{' '}
+                  <strong className="text-white">{booking.customerEmail}</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResendEmail}
+                disabled={resendingEmail}
+                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 font-semibold text-[11px] cursor-pointer disabled:opacity-50"
+              >
+                {resendingEmail ? 'Đang gửi...' : 'Gửi lại Email'}
+              </button>
             </div>
           )}
 
           {/* ============================================================== */}
           {/* THẺ VÉ ĐIỆN TỬ & MÃ QR CHECK-IN TRỰC TIẾP CHO KHÁCH HÀNG       */}
           {/* ============================================================== */}
-          {isSuccess && loadingBooking && (
+          {loadingBooking && (
             <div className="w-full py-10 flex flex-col items-center justify-center gap-2 text-xs text-neutral-400">
               <Loader2 className="w-6 h-6 animate-spin text-amber-400" />
-              <span>Đang xuất vé điện tử và mã QR check-in...</span>
+              <span>Đang đối soát giao dịch ngân hàng và xuất vé điện tử...</span>
             </div>
           )}
 
