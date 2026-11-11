@@ -63,17 +63,17 @@ export const Navbar = () => {
           </NavLink>
 
           <a
-            href="/#now-showing"
-            className="text-neutral-300 hover:text-white transition-colors pb-1 border-b-2 border-transparent"
+            href="/#coming-soon"
+            className="text-neutral-300 hover:text-pink-400 transition-colors pb-1 border-b-2 border-transparent"
           >
-            Phim Đang Chiếu
+            Phim Sắp Chiếu
           </a>
 
           <a
-            href="/#coming-soon"
-            className="text-neutral-300 hover:text-white transition-colors pb-1 border-b-2 border-transparent"
+            href="/#now-showing"
+            className="text-neutral-300 hover:text-amber-400 transition-colors pb-1 border-b-2 border-transparent"
           >
-            Phim Sắp Chiếu
+            Phim Đang Chiếu
           </a>
 
           <a
@@ -227,18 +227,18 @@ export const Navbar = () => {
             Trang Chủ
           </NavLink>
           <a
+            href="/#coming-soon"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-3 py-2 text-sm font-medium text-neutral-200 hover:text-pink-400 hover:bg-neutral-900/60 rounded-lg transition-colors"
+          >
+            Phim Sắp Chiếu
+          </a>
+          <a
             href="/#now-showing"
             onClick={() => setMobileMenuOpen(false)}
             className="block px-3 py-2 text-sm font-medium text-neutral-200 hover:text-amber-400 hover:bg-neutral-900/60 rounded-lg transition-colors"
           >
             Phim Đang Chiếu
-          </a>
-          <a
-            href="/#coming-soon"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 text-sm font-medium text-neutral-200 hover:text-amber-400 hover:bg-neutral-900/60 rounded-lg transition-colors"
-          >
-            Phim Sắp Chiếu
           </a>
           <a
             href="/#formats"
