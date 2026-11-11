@@ -13,10 +13,23 @@ import java.util.List;
 @Builder
 public class BookingSummaryResponse {
     private Integer bookingId;
+    private String bookingRef;
     private String status;
     private LocalDateTime bookingDate;
     private LocalDateTime expiresAt;
     private Long remainingSeconds;
+
+    // Thông tin khách hàng đặt vé
+    private Integer userId;
+    private String customerName;
+    private String customerEmail;
+    private String customerPhone;
+
+    // Thông tin thanh toán (PayOS / VNPAY / Tiền mặt)
+    private String paymentMethod;
+    private String paymentStatus;
+    private String transactionId;
+    private LocalDateTime paymentDate;
 
     // Phim & Suất chiếu
     private Integer movieId;

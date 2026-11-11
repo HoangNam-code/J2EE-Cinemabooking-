@@ -12,6 +12,7 @@ import java.util.List;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Integer> {
     List<Booking> findByUserUserIdOrderByCreatedAtDesc(Integer userId);
+    List<Booking> findAllByOrderByBookingIdDesc();
     List<Booking> findByStatusAndExpiresAtBefore(Booking.Status status, LocalDateTime dateTime);
 
     @Query("SELECT b FROM Booking b WHERE b.status = :status")

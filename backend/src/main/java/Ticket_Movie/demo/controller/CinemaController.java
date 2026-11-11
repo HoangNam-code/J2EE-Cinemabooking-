@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("api/v1/movies")
+@RequestMapping("/api/v1/cinemas")
 @CrossOrigin(origins = "*") // "*" cho phép các nguồn gọi API này
 public class CinemaController {
 

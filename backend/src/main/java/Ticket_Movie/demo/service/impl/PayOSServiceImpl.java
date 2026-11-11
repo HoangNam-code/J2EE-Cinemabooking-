@@ -129,16 +129,29 @@ public class PayOSServiceImpl implements PayOSService {
             String qrCode = dataNode.path("qrCode").asText("");
             String checkoutUrl = dataNode.path("checkoutUrl").asText("");
             String payosStatus = dataNode.path("status").asText("PENDING");
+            // QUAN TRỌNG: Lấy đúng nội dung chuyển khoản (description) do PayOS sinh ra (có mã định danh đầu dòng, VD: CS... CP 12)
+            String payosDescription = dataNode.path("description").asText(description);
+            if (payosDescription == null || payosDescription.isBlank()) {
+                payosDescription = description;
+            }
 
-            // Tạo link ảnh VietQR trực quan
+            // Tạo link ảnh VietQR trực quan với đúng payosDescription của PayOS
             String qrUrl = String.format("https://img.vietqr.io/image/%s-%s-compact2.png?amount=%d&addInfo=%s&accountName=%s",
                     bin, accountNumber, amount,
-                    URLEncoder.encode(description, StandardCharsets.UTF_8),
+                    URLEncoder.encode(payosDescription, StandardCharsets.UTF_8),
                     URLEncoder.encode(accountName, StandardCharsets.UTF_8));
 
-            // Lưu orderCode vào transactionId để đối soát và kiểm tra trạng thái
+            // Lưu orderCode vào transactionId để đối soát và kiểm tra trạng thái.
+            // Nếu trước đó đơn đã từng tạo orderCode khác thì giữ lại cả hai (ngăn cách dấu phẩy) để không mất mã cũ khi khách quét mã đầu tiên.
             payment.setMethod(Payment.Method.BANKING);
-            payment.setTransactionId(String.valueOf(orderCode));
+            String existingTx = payment.getTransactionId();
+            String newOrderCodeStr = String.valueOf(orderCode);
+            if (existingTx != null && !existingTx.isBlank() && !existingTx.startsWith("TXN-")) {
+                String combined = newOrderCodeStr + "," + existingTx;
+                payment.setTransactionId(combined.length() <= 95 ? combined : newOrderCodeStr);
+            } else {
+                payment.setTransactionId(newOrderCodeStr);
+            }
             payment.setStatus(Payment.Status.PENDING);
             paymentRepository.save(payment);
 
@@ -154,7 +167,7 @@ public class PayOSServiceImpl implements PayOSService {
                     .accountNumber(accountNumber)
                     .accountName(accountName)
                     .bin(bin)
-                    .description(description)
+                    .description(payosDescription)
                     .expiredAt(expiredAt)
                     .paymentUrl(checkoutUrl)
                     .build();
@@ -185,38 +198,52 @@ public class PayOSServiceImpl implements PayOSService {
             return Map.of("paid", false, "status", booking.getStatus().name());
         }
 
-        String orderCode = payment.getTransactionId();
+        String rawOrderCodes = payment.getTransactionId();
 
-        // 2. Chủ động hỏi trực tiếp API PayOS (giúp chạy mượt mà ngay cả trên localhost không có Webhook)
+        // 2. Chủ động gọi API GET https://api-merchant.payos.vn/v2/payment-requests/{id} theo tài liệu https://payos.vn/docs/api/
         if (payOSConfig.isConfigured()) {
-            try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(PAYOS_API_URL + "/" + orderCode))
-                        .header("x-client-id", payOSConfig.getClientId())
-                        .header("x-api-key", payOSConfig.getApiKey())
-                        .GET()
-                        .timeout(Duration.ofSeconds(6))
-                        .build();
+            String[] codes = rawOrderCodes.split(",");
+            for (String codeItem : codes) {
+                String orderCode = codeItem.trim();
+                if (orderCode.isEmpty()) continue;
 
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200) {
-                    JsonNode root = objectMapper.readTree(response.body());
-                    if ("00".equals(root.path("code").asText())) {
-                        String status = root.path("data").path("status").asText("");
-                        if ("PAID".equalsIgnoreCase(status)) {
-                            // Cập nhật thanh toán thành công, tự động xuất vé và gửi email
-                            payment.setStatus(Payment.Status.SUCCESS);
-                            paymentRepository.save(payment);
-                            bookingService.confirmBookingPayment(bookingId, orderCode);
-                            log.info("PayOS polling: Đơn #{} thanh toán thành công với orderCode {}", bookingId, orderCode);
-                            return Map.of("paid", true, "status", "PAID");
-                        } else if ("CANCELLED".equalsIgnoreCase(status) || "EXPIRED".equalsIgnoreCase(status)) {
-                            return Map.of("paid", false, "status", status.toUpperCase());
+                try {
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(PAYOS_API_URL + "/" + orderCode))
+                            .header("x-client-id", payOSConfig.getClientId())
+                            .header("x-api-key", payOSConfig.getApiKey())
+                            .GET()
+                            .timeout(Duration.ofSeconds(6))
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    if (response.statusCode() == 200) {
+                        JsonNode root = objectMapper.readTree(response.body());
+                        if ("00".equals(root.path("code").asText())) {
+                            JsonNode dataNode = root.path("data");
+                            String status = dataNode.path("status").asText("");
+                            long amountPaid = dataNode.path("amountPaid").asLong(0);
+                            long amountRequired = dataNode.path("amount").asLong(0);
+                            long amountRemaining = dataNode.path("amountRemaining").asLong(-1);
+
+                            boolean isPaidOnPayOS = "PAID".equalsIgnoreCase(status)
+                                    || (amountRequired > 0 && amountPaid >= amountRequired)
+                                    || (amountRequired > 0 && amountRemaining == 0 && amountPaid > 0);
+
+                            if (isPaidOnPayOS) {
+                                // Cập nhật thanh toán thành công, tự động xuất vé và gửi email
+                                payment.setStatus(Payment.Status.SUCCESS);
+                                payment.setTransactionId(orderCode);
+                                paymentRepository.save(payment);
+                                bookingService.confirmBookingPayment(bookingId, orderCode);
+                                log.info("✅ [PayOS API] Đơn #{} ĐÃ THANH TOÁN thành công (orderCode={}, amountPaid={})", bookingId, orderCode, amountPaid);
+                                return Map.of("paid", true, "status", "PAID", "orderCode", orderCode);
+                            }
                         }
                     }
+                } catch (Exception e) {
+                    log.warn("Không thể truy vấn trạng thái PayOS cho orderCode {}: {}", orderCode, e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("Không thể truy vấn trạng thái PayOS cho orderCode {}: {}", orderCode, e.getMessage());
             }
         }
 
@@ -240,23 +267,20 @@ public class PayOSServiceImpl implements PayOSService {
                 return Map.of("error", 1, "message", "Thiếu dữ liệu Webhook");
             }
 
-            // Dữ liệu PayOS webhook cần xác thực chữ ký:
-            // amount, code, desc, orderCode, paymentLinkId, reference, transactionDateTime
-            String amount = String.valueOf(data.get("amount"));
-            String code = String.valueOf(data.get("code"));
-            String desc = String.valueOf(data.get("desc"));
-            String orderCode = String.valueOf(data.get("orderCode"));
-            String paymentLinkId = String.valueOf(data.get("paymentLinkId"));
-            String reference = String.valueOf(data.get("reference"));
-            String transactionDateTime = String.valueOf(data.get("transactionDateTime"));
-
-            String dataToVerify = String.format("amount=%s&code=%s&desc=%s&orderCode=%s&paymentLinkId=%s&reference=%s&transactionDateTime=%s",
-                    amount, code, desc, orderCode, paymentLinkId, reference, transactionDateTime);
-
-            String expectedSignature = payOSConfig.hmacSha256(dataToVerify);
-            if (!expectedSignature.equalsIgnoreCase(signature)) {
+            // Kiểm tra chữ ký dữ liệu theo đúng chuẩn tài liệu PayOS:
+            // https://payos.vn/docs/tich-hop-webhook/kiem-tra-du-lieu-voi-signature/
+            if (!payOSConfig.isValidData(data, signature)) {
+                String expectedSignature = payOSConfig.createSignatureFromObj(data);
                 log.warn("Chữ ký PayOS Webhook không hợp lệ! expected: {}, actual: {}", expectedSignature, signature);
                 return Map.of("error", 1, "message", "Chữ ký không khớp");
+            }
+
+            String code = String.valueOf(data.getOrDefault("code", ""));
+            String orderCode = String.valueOf(data.getOrDefault("orderCode", ""));
+
+            // Bỏ qua webhook test mặc định của PayOS (orderCode = 123) nhưng vẫn trả về 200 OK để PayOS xác thực URL
+            if ("123".equals(orderCode)) {
+                return Map.of("error", 0, "message", "Webhook test thành công");
             }
 
             if ("00".equals(code)) {

@@ -30,6 +30,7 @@ public class BookingServiceImpl implements BookingService {
     private final FoodRepository foodRepository;
     private final TicketRepository ticketRepository;
     private final PromotionRepository promotionRepository;
+    private final PaymentRepository paymentRepository;
     private final Ticket_Movie.demo.service.EmailService emailService;
 
     @Override
@@ -170,6 +171,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public BookingSummaryResponse getBookingSummary(Integer bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking ID: " + bookingId));
@@ -191,8 +193,16 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BookingSummaryResponse> getUserBookings(Integer userId) {
         List<Booking> list = bookingRepository.findByUserUserIdOrderByCreatedAtDesc(userId);
+        return list.stream().map(b -> getBookingSummary(b.getBookingId())).collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BookingSummaryResponse> getAllBookings() {
+        List<Booking> list = bookingRepository.findAllByOrderByBookingIdDesc();
         return list.stream().map(b -> getBookingSummary(b.getBookingId())).collect(Collectors.toList());
     }
 
@@ -230,10 +240,21 @@ public class BookingServiceImpl implements BookingService {
         }
         bookingRepository.save(booking);
 
-        // Gửi email vé điện tử HTML kèm mã QR check-in
+        // Gửi email vé điện tử HTML kèm mã QR check-in và bảng giá chi tiết
         try {
             emailService.sendBookingConfirmationEmail(booking);
         } catch (Exception ignored) {}
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void sendTicketEmailIfPaid(Integer bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking ID: " + bookingId));
+        if (booking.getStatus() != Booking.Status.PAID) {
+            throw new AppException(400, "Đơn hàng chưa được thanh toán, không thể gửi vé điện tử");
+        }
+        emailService.sendBookingConfirmationEmail(booking);
     }
 
     private BookingSummaryResponse mapToSummary(Booking booking, Showtime showtime, BigDecimal ticketSubtotal, BigDecimal foodSubtotal, String promoCode, BigDecimal discountAmount) {
@@ -242,6 +263,9 @@ public class BookingServiceImpl implements BookingService {
             remainingSeconds = Math.max(0, Duration.between(LocalDateTime.now(), booking.getExpiresAt()).getSeconds());
         }
 
+        // CHỈ trả về mã QR vé khi đơn hàng ĐÃ THANH TOÁN (PAID)
+        boolean isPaid = (booking.getStatus() == Booking.Status.PAID);
+
         List<BookingSummaryResponse.TicketItem> ticketItems = booking.getTickets().stream().map(t ->
                 BookingSummaryResponse.TicketItem.builder()
                         .ticketId(t.getTicketId())
@@ -249,7 +273,7 @@ public class BookingServiceImpl implements BookingService {
                         .seatCode(t.getSeat().getSeatCode())
                         .seatType(t.getSeat().getSeatType().name())
                         .price(t.getPrice())
-                        .qrCode(t.getQrCode())
+                        .qrCode(isPaid ? t.getQrCode() : null)
                         .build()
         ).collect(Collectors.toList());
 
@@ -263,12 +287,26 @@ public class BookingServiceImpl implements BookingService {
                         .build()
         ).collect(Collectors.toList());
 
+        User customer = booking.getUser();
+        Payment payment = booking.getBookingId() != null
+                ? paymentRepository.findByBookingBookingId(booking.getBookingId()).orElse(null)
+                : null;
+
         return BookingSummaryResponse.builder()
                 .bookingId(booking.getBookingId())
+                .bookingRef(booking.getBookingRef())
                 .status(booking.getStatus().name())
                 .bookingDate(booking.getBookingDate())
                 .expiresAt(booking.getExpiresAt())
                 .remainingSeconds(remainingSeconds)
+                .userId(customer != null ? customer.getUserId() : null)
+                .customerName(customer != null ? (customer.getFullName() != null ? customer.getFullName() : customer.getUsername()) : "Khách vãng lai")
+                .customerEmail(customer != null ? customer.getEmail() : null)
+                .customerPhone(customer != null ? customer.getPhone() : null)
+                .paymentMethod(payment != null && payment.getMethod() != null ? payment.getMethod().name() : null)
+                .paymentStatus(payment != null && payment.getStatus() != null ? payment.getStatus().name() : null)
+                .transactionId(payment != null ? payment.getTransactionId() : null)
+                .paymentDate(payment != null ? payment.getPaymentDate() : null)
                 .movieId(showtime != null ? showtime.getMovie().getMovieId() : null)
                 .movieName(showtime != null ? showtime.getMovie().getMovieName() : null)
                 .posterUrl(showtime != null ? showtime.getMovie().getPosterUrl() : null)

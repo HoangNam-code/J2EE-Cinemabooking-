@@ -47,30 +47,32 @@ export const PaymentPage = () => {
   const [copiedField, setCopiedField] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
   useEffect(() => {
     loadBooking();
   }, [bookingId]);
 
   // Bộ đếm ngược thời gian giữ ghế tổng thể (10 phút)
   useEffect(() => {
-    if (secondsLeft <= 0) return;
     const interval = setInterval(() => {
       setSecondsLeft((prev) => {
         if (prev <= 1) {
           clearInterval(interval);
           toast.error('Hết thời gian giữ ghế! Đơn hàng đã bị hủy tự động.');
-          navigate('/');
+          navigateRef.current('/');
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [secondsLeft, navigate]);
+  }, []);
 
   // Bộ đếm ngược thời gian tồn tại của mã QR (đúng 5 phút = 300 giây)
   useEffect(() => {
-    if (!payosModal || qrSecondsLeft <= 0 || paymentSuccess) return;
+    if (!payosModal || paymentSuccess) return;
 
     const qrInterval = setInterval(() => {
       setQrSecondsLeft((prev) => {
@@ -83,40 +85,58 @@ export const PaymentPage = () => {
     }, 1000);
 
     return () => clearInterval(qrInterval);
-  }, [payosModal, qrSecondsLeft, paymentSuccess]);
+  }, [payosModal, paymentSuccess]);
 
-  // Polling tự động kiểm tra xem tiền đã vào tài khoản chưa (mỗi 2.5 giây)
+  // Chạy ngầm kiểm tra trạng thái chuyển khoản từ PayOS (mỗi 1.5 giây)
+  // Chỉ phụ thuộc vào các giá trị nguyên thủy [payosModal, paymentSuccess, bookingId] để không bao giờ bị ngắt bởi đồng hồ đếm ngược
   useEffect(() => {
-    if (!payosModal || qrSecondsLeft <= 0 || paymentSuccess) return;
+    if (!payosModal || paymentSuccess) return;
 
-    let isPolling = false;
-    const pollInterval = setInterval(async () => {
-      if (isPolling) return;
-      isPolling = true;
+    let cancelled = false;
+    let timerId = null;
+
+    const pollLoop = async () => {
+      if (cancelled) return;
       try {
         const res = await paymentApi.checkPayOSStatus(bookingId);
-        if (res && res.paid) {
-          clearInterval(pollInterval);
+        if (!cancelled && res && res.paid) {
           setPaymentSuccess(true);
           toast.success('Chuyển khoản thành công! Vé xem phim của bạn đã sẵn sàng.');
-          setTimeout(() => {
-            navigate(`/payment-result?method=PAYOS&vnp_TxnRef=${bookingId}&vnp_ResponseCode=00`);
-          }, 1200);
+          navigateRef.current(`/payment-result?method=PAYOS&vnp_TxnRef=${bookingId}&vnp_ResponseCode=00`);
+          return;
         }
       } catch (err) {
         console.error('Lỗi kiểm tra trạng thái PayOS:', err);
-      } finally {
-        isPolling = false;
       }
-    }, 2500);
+      if (!cancelled) {
+        timerId = setTimeout(pollLoop, 1500);
+      }
+    };
 
-    return () => clearInterval(pollInterval);
-  }, [payosModal, qrSecondsLeft, paymentSuccess, bookingId, navigate]);
+    pollLoop();
+
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [payosModal, paymentSuccess, bookingId]);
 
   const loadBooking = async () => {
     try {
       setLoading(true);
+      // Kiểm tra ngầm xem đơn này đã được thanh toán trên PayOS chưa (ví dụ đơn CP 5 vừa chuyển khoản)
+      const statusCheck = await paymentApi.checkPayOSStatus(bookingId).catch(() => null);
+      if (statusCheck && statusCheck.paid) {
+        toast.success('Đơn hàng đã được thanh toán thành công! Đang mở vé điện tử...');
+        navigate(`/payment-result?method=PAYOS&vnp_TxnRef=${bookingId}&vnp_ResponseCode=00`, { replace: true });
+        return;
+      }
+
       const data = await bookingApi.getSummary(bookingId);
+      if (data && data.status === 'PAID') {
+        navigate(`/payment-result?method=PAYOS&vnp_TxnRef=${bookingId}&vnp_ResponseCode=00`, { replace: true });
+        return;
+      }
       setBooking(data);
       if (data.remainingSeconds !== undefined && data.remainingSeconds !== null) {
         setSecondsLeft(data.remainingSeconds);
@@ -209,27 +229,11 @@ export const PaymentPage = () => {
   const paymentMethods = [
     {
       id: 'PAYOS',
-      title: 'Chuyển Khoản VietQR (PayOS)',
-      desc: 'Quét mã QR tự động bằng mọi App Ngân hàng & Ví (MB, VCB, Techcombank, MoMo...)',
+      title: 'Chuyển Khoản Ngân Hàng VietQR (PayOS)',
+      desc: 'Quét mã QR chuyển khoản tự động bằng mọi App Ngân hàng & Ví điện tử',
       icon: QrCode,
-      badge: 'Khuyên Dùng',
+      badge: 'Tự Động 24/7',
       badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    },
-    {
-      id: 'VNPAY',
-      title: 'Cổng VNPAY',
-      desc: 'Thẻ ATM nội địa, Thẻ quốc tế Visa/Mastercard',
-      icon: CreditCard,
-      badge: 'Trực Tuyến',
-      badgeColor: 'bg-neutral-800 text-neutral-400 border-neutral-700',
-    },
-    {
-      id: 'CASH',
-      title: 'Tiền Mặt Tại Quầy',
-      desc: 'Thanh toán trực tiếp khi nhận vé tại quầy rạp',
-      icon: Wallet,
-      badge: 'Tại Rạp',
-      badgeColor: 'bg-neutral-800 text-neutral-400 border-neutral-700',
     },
   ];
 
@@ -590,20 +594,20 @@ export const PaymentPage = () => {
                   </div>
                 </div>
 
-                {/* Vùng hiển thị mã QR */}
+                {/* Vùng hiển thị mã QR chuẩn EMVCo trực tiếp từ PayOS */}
                 <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl shadow-inner border border-neutral-300">
-                  {payosData.qrUrl ? (
-                    <img
-                      src={payosData.qrUrl}
-                      alt="VietQR PayOS"
-                      className="w-64 h-auto max-h-72 object-contain"
-                    />
-                  ) : payosData.qrCode ? (
+                  {payosData.qrCode ? (
                     <QRCodeSVG
                       value={payosData.qrCode}
                       size={220}
                       level="M"
                       includeMargin={true}
+                    />
+                  ) : payosData.qrUrl ? (
+                    <img
+                      src={payosData.qrUrl}
+                      alt="VietQR PayOS"
+                      className="w-64 h-auto max-h-72 object-contain"
                     />
                   ) : (
                     <div className="w-56 h-56 flex items-center justify-center text-neutral-500 text-xs">
@@ -680,27 +684,6 @@ export const PaymentPage = () => {
                     </div>
                   </div>
                 </div>
-
-                {/* Status indicator: Polling */}
-                <div className="p-3 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center gap-2.5 text-xs text-amber-300">
-                  <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
-                  <span>Đang chờ chuyển khoản... Hệ thống sẽ tự động xuất vé ngay khi tiền vào.</span>
-                </div>
-
-                {/* Link mở cổng PayOS bên ngoài nếu cần */}
-                {payosData.paymentUrl && (
-                  <div className="text-center pt-1">
-                    <a
-                      href={payosData.paymentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-neutral-400 hover:text-amber-400 underline underline-offset-4 transition-colors"
-                    >
-                      <span>Mở trang thanh toán PayOS trên tab mới</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                )}
               </div>
             )}
 
